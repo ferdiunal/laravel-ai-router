@@ -36,7 +36,9 @@ it('publishes config only and keeps package migrations internal', function () {
 
 it('registers a dedicated laravel-ai-router sqlite connection by default', function () {
     expect(config('laravel-ai-router.database.connection'))->toBe('laravel-ai-router');
-    expect(config('laravel-ai-router.database.sqlite.database'))->toEndWith('database/laravel-ai-router.sqlite');
+    $databasePath = str_replace('\\', '/', (string) config('laravel-ai-router.database.sqlite.database'));
+
+    expect($databasePath)->toEndWith('database/laravel-ai-router.sqlite');
     expect(config('database.connections.laravel-ai-router.driver'))->toBe('sqlite');
     expect(config('database.connections.laravel-ai-router.foreign_key_constraints'))->toBeTrue();
 });

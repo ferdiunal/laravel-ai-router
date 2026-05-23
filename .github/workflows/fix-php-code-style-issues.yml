@@ -1,9 +1,7 @@
 name: Fix PHP code style issues
 
 on:
-  push:
-    paths:
-      - '**.php'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -11,13 +9,11 @@ permissions:
 jobs:
   php-code-styling:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          ref: ${{ github.head_ref }}
 
       - name: Fix PHP code style issues
         uses: aglipanci/laravel-pint-action@2.6

@@ -2,6 +2,21 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.2.0 - 2026-05-23
+
+### Changed
+
+- Generalized live `/models` cache exposure for routable OpenAI-compatible providers: non-`:free` model IDs are cached as available credits-based rows, routable by exact model ID, and excluded from default `auto` fallback unless explicitly eligible.
+- Added opt-in NVIDIA live model discovery smoke coverage guarded by `LARAVEL_AI_ROUTER_LIVE_NVIDIA_MODELS` and `NVIDIA_API_KEY`/`NVAPI_API_KEY`.
+- Documented available-model discovery and routing behavior in both English and Turkish READMEs.
+
+### Validation
+
+- Local `git diff --check origin/main..HEAD` before push
+- Local `composer validate --strict`
+- Local `composer ci`: 131 passed, 1 skipped, 438 assertions
+- GitHub Actions Tests matrix on `main`: Ubuntu/Windows x prefer-stable/prefer-lowest passed
+
 ## Unreleased
 
 ### Changed

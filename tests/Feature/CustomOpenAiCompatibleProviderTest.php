@@ -114,7 +114,7 @@ it('routes prompts through config-defined custom OpenAI-compatible providers', f
     });
 });
 
-it('adds runtime custom OpenAI-compatible providers and caches their routable free models', function () {
+it('adds runtime custom OpenAI-compatible providers and caches their routable available models', function () {
     migrateLaravelAiRouterForCustomProviderTests();
 
     app(ProviderDefinitionManager::class)->addOpenAiCompatible(
@@ -137,10 +137,19 @@ it('adds runtime custom OpenAI-compatible providers and caches their routable fr
     $key = app(ProviderKeyManager::class)->add('runtime-openai', 'key-runtime-value-123456', 'Runtime', refreshModels: true);
 
     expect($key->platform)->toBe('runtime-openai')
-        ->and(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->pluck('model_id')->all())
-        ->toBe(['runtime/free-model:free'])
+        ->and(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->orderBy('model_id')->pluck('model_id')->all())
+        ->toBe(['runtime/free-model:free', 'runtime/paid-model'])
         ->and(LaravelAiRouterModel::query()->where('platform', 'runtime-openai')->where('model_id', 'runtime/free-model:free')->exists())
         ->toBeTrue();
+
+    $paidModel = LaravelAiRouterModel::query()
+        ->where('platform', 'runtime-openai')
+        ->where('model_id', 'runtime/paid-model')
+        ->firstOrFail();
+
+    expect(LaravelAiRouterFallback::query()
+        ->where('laravel_ai_router_model_id', $paidModel->getKey())
+        ->value('enabled'))->toBeFalse();
 });
 
 it('rejects unsafe or colliding custom provider definitions', function (string $platform, string $baseUrl, string $field) {

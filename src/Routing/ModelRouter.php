@@ -209,8 +209,7 @@ final class ModelRouter
         $cacheQuery = LaravelAiRouterProviderModelCache::query()
             ->where('provider_key_id', $key->getKey())
             ->where('model_id', $model->model_id)
-            ->where('enabled', true)
-            ->where('is_free', true);
+            ->where('enabled', true);
 
         if ($requiresTools) {
             $cacheQuery->where(function ($query): void {

@@ -5,10 +5,14 @@ declare(strict_types=1);
 use Ferdiunal\LaravelAiRouter\Catalog\SeedModelCatalog;
 use Ferdiunal\LaravelAiRouter\Exceptions\ModelNotFoundException;
 use Ferdiunal\LaravelAiRouter\Exceptions\NoAvailableModelException;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterFallback;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterModel;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderModelCache;
 use Ferdiunal\LaravelAiRouter\Routing\ModelRouter;
+use Ferdiunal\LaravelAiRouter\Services\ProviderKeyManager;
+use Ferdiunal\LaravelAiRouter\Services\ProviderModelCacheService;
+use Illuminate\Support\Facades\Http;
 
 function migrateLaravelAiRouterForRouterTests(): void
 {
@@ -174,6 +178,80 @@ it('routes tool prompts through cached models with unknown tool support', functi
     $route = app(ModelRouter::class)->route($model->model_id, 1000, requiresTools: true);
 
     expect($route->apiKey)->toBe('key-unknown-tools-value-123456');
+});
+
+it('routes exact nvidia live cached models without enabling them for auto fallback by default', function () {
+    migrateLaravelAiRouterForRouterTests();
+
+    Http::fake([
+        'https://integrate.api.nvidia.com/v1/models' => Http::response([
+            'data' => [
+                ['id' => 'nvidia/nemotron-nano-9b-v2', 'name' => 'Nemotron Nano 9B v2'],
+            ],
+        ]),
+    ]);
+
+    $key = app(ProviderKeyManager::class)->add('nvidia', 'key-nvidia-value-123456', 'NVIDIA', refreshModels: true);
+
+    $model = LaravelAiRouterModel::query()
+        ->where('platform', 'nvidia')
+        ->where('model_id', 'nvidia/nemotron-nano-9b-v2')
+        ->first();
+
+    expect($model)->not->toBeNull();
+    assert($model instanceof LaravelAiRouterModel);
+    expect($model->enabled)->toBeTrue();
+
+    $fallback = LaravelAiRouterFallback::query()
+        ->where('laravel_ai_router_model_id', $model->getKey())
+        ->first();
+
+    expect($fallback)->not->toBeNull();
+    assert($fallback instanceof LaravelAiRouterFallback);
+    expect($fallback->enabled)->toBeFalse();
+    expect(app(ProviderModelCacheService::class)->firstAvailableModelId())->toBeNull();
+
+    $route = app(ModelRouter::class)->route('nvidia/nemotron-nano-9b-v2');
+
+    expect($route->platform)->toBe('nvidia')
+        ->and($route->modelId)->toBe('nvidia/nemotron-nano-9b-v2')
+        ->and($route->keyId)->toBe($key->getKey());
+});
+
+it('routes exact non-free live cached models for other providers without adding them to auto fallback', function () {
+    migrateLaravelAiRouterForRouterTests();
+
+    Http::fake([
+        'https://openrouter.ai/api/v1/models' => Http::response([
+            'data' => [
+                ['id' => 'provider/paid-model', 'name' => 'Provider Paid Model'],
+            ],
+        ]),
+    ]);
+
+    $key = app(ProviderKeyManager::class)->add('openrouter', 'key-openrouter-value-123456', 'Primary', refreshModels: true);
+
+    $model = LaravelAiRouterModel::query()
+        ->where('platform', 'openrouter')
+        ->where('model_id', 'provider/paid-model')
+        ->first();
+
+    expect($model)->not->toBeNull();
+    assert($model instanceof LaravelAiRouterModel);
+
+    $fallback = LaravelAiRouterFallback::query()
+        ->where('laravel_ai_router_model_id', $model->getKey())
+        ->first();
+
+    expect($fallback)->not->toBeNull();
+    assert($fallback instanceof LaravelAiRouterFallback);
+    expect($fallback->enabled)->toBeFalse();
+
+    $route = app(ModelRouter::class)->route('provider/paid-model');
+
+    expect($route->platform)->toBe('openrouter')
+        ->and($route->modelId)->toBe('provider/paid-model')
+        ->and($route->keyId)->toBe($key->getKey());
 });
 
 it('fails clearly for unknown specific model ids', function () {

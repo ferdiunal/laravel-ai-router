@@ -48,7 +48,7 @@ final class LaravelAiRouterProvider extends Provider implements TextProvider
     }
 
     /**
-     * Return cached free model IDs for this package, optionally scoped by provider + label.
+     * Return cached available model IDs for this package, optionally scoped by provider + label.
      *
      * @return array<int, string>
      */

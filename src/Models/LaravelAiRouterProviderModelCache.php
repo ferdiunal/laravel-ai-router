@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * Represents a provider-label-scoped cache row for a free model discovered from a provider key.
+ * Represents a provider-label-scoped cache row for an available model discovered from a provider key.
  *
  * @property int $id
  * @property int $provider_key_id

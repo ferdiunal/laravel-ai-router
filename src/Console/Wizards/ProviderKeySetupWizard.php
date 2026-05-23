@@ -48,7 +48,7 @@ final class ProviderKeySetupWizard
 
         $choices = $this->modelCache->choicesForKey($key);
         if (count($choices) <= 1) {
-            warning('No cached free models found for this provider key yet. Defaulting to auto routing.');
+            warning('No cached available models found for this provider key yet. Defaulting to auto routing.');
         }
 
         $selectedModel = $this->modelPrompt($interactive, $choices);
@@ -107,7 +107,7 @@ final class ProviderKeySetupWizard
      */
     private function modelPrompt(bool $interactive, array $options): string
     {
-        $options = $options !== [] ? $options : ['auto' => 'Auto — route requests across healthy cached free models'];
+        $options = $options !== [] ? $options : ['auto' => 'Auto — route requests across healthy cached available models'];
 
         if (! $interactive) {
             return array_key_exists('auto', $options) ? 'auto' : (string) array_key_first($options);

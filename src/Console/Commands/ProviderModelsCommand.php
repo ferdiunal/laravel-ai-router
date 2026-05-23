@@ -15,7 +15,7 @@ use function Laravel\Prompts\table;
 use function Laravel\Prompts\warning;
 
 /**
- * Lists, refreshes, and selects cached free models for a specific provider key.
+ * Lists, refreshes, and selects cached available models for a specific provider key.
  */
 final class ProviderModelsCommand extends Command
 {
@@ -23,7 +23,7 @@ final class ProviderModelsCommand extends Command
 
     protected $signature = 'laravel-ai-router:provider:models';
 
-    protected $description = 'List, refresh, search, and select cached free models for a provider key.';
+    protected $description = 'List, refresh, search, and select cached available models for a provider key.';
 
     /**
      * Prompt for a provider key, optionally refresh its model cache, list cached models, and update the default model.

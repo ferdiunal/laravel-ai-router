@@ -18,7 +18,7 @@ function migrateLaravelAiRouterForCacheTests(): void
     }
 }
 
-it('caches supported free models by provider and label when a key is added', function () {
+it('caches available live models by provider and label while preserving free metadata', function () {
     migrateLaravelAiRouterForCacheTests();
 
     Http::fake([
@@ -35,14 +35,60 @@ it('caches supported free models by provider and label when a key is added', fun
     expect($key)->toBeInstanceOf(LaravelAiRouterProviderKey::class)
         ->and($key->platform)->toBe('openrouter')
         ->and($key->label)->toBe('Primary')
-        ->and(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->pluck('model_id')->all())
-        ->toBe(['qwen/qwen3-coder:free']);
+        ->and(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->orderBy('model_id')->pluck('model_id')->all())
+        ->toBe(['paid/model', 'qwen/qwen3-coder:free']);
+
+    $paid = LaravelAiRouterProviderModelCache::query()->where('model_id', 'paid/model')->firstOrFail();
+    expect($paid->is_free)->toBeFalse()
+        ->and($paid->budget_label)->toBe('credits-based');
 
     $provider = app(AiManager::class)->textProvider('laravel-ai-router');
 
     expect($provider)->toBeInstanceOf(LaravelAiRouterProvider::class);
     assert($provider instanceof LaravelAiRouterProvider);
-    expect($provider->models('openrouter', 'Primary'))->toBe(['auto', 'qwen/qwen3-coder:free']);
+    expect($provider->models('openrouter', 'Primary'))->toBe(['auto', 'paid/model', 'qwen/qwen3-coder:free']);
+});
+
+it('caches nvidia live models as credits based available models', function () {
+    migrateLaravelAiRouterForCacheTests();
+
+    Http::fake([
+        'https://integrate.api.nvidia.com/v1/models' => Http::response([
+            'data' => [
+                [
+                    'id' => 'meta/llama-3.1-70b-instruct',
+                    'name' => 'Llama 3.1 70B Instruct',
+                    'context_length' => 131072,
+                    'supported_parameters' => ['tools'],
+                ],
+                [
+                    'id' => 'nvidia/nemotron-nano-9b-v2',
+                    'name' => 'Nemotron Nano 9B v2',
+                    'context_length' => 128000,
+                ],
+            ],
+        ]),
+    ]);
+
+    $key = app(ProviderKeyManager::class)->add('nvidia', 'key-nvidia-value-123456', 'NVIDIA', refreshModels: true);
+
+    $models = LaravelAiRouterProviderModelCache::query()
+        ->where('provider_key_id', $key->getKey())
+        ->orderBy('model_id')
+        ->get();
+
+    expect($models->pluck('model_id')->all())->toBe([
+        'meta/llama-3.1-70b-instruct',
+        'nvidia/nemotron-nano-9b-v2',
+    ]);
+
+    expect($models->every(fn (LaravelAiRouterProviderModelCache $model): bool => $model->is_free === false))->toBeTrue();
+    expect($models->every(fn (LaravelAiRouterProviderModelCache $model): bool => $model->budget_label === 'credits-based'))->toBeTrue();
+    expect($models->firstWhere('model_id', 'meta/llama-3.1-70b-instruct')->supports_tools)->toBeTrue();
+    expect(app(ProviderModelCacheService::class)->modelIds('nvidia', 'NVIDIA', includeAuto: false))->toBe([
+        'meta/llama-3.1-70b-instruct',
+        'nvidia/nemotron-nano-9b-v2',
+    ]);
 });
 
 it('falls back to curated models when a provider cannot return a live model list', function () {
@@ -137,7 +183,7 @@ it('excludes expired provider label model cache rows from model listings', funct
     assert($provider instanceof LaravelAiRouterProvider);
     expect($provider->models('openrouter', 'Primary', includeAuto: false))->toBe([]);
     expect($modelCache->cachedModelsForKey($key))->toBe([]);
-    expect($modelCache->choicesForKey($key))->toBe(['auto' => 'Auto — route requests across healthy cached free models']);
+    expect($modelCache->choicesForKey($key))->toBe(['auto' => 'Auto — route requests across healthy cached available models']);
 });
 
 it('exposes cached model choices only for routable healthy provider keys', function () {
@@ -180,6 +226,6 @@ it('exposes cached model choices only for routable healthy provider keys', funct
 
     foreach ([$invalid, $disabled, $unsupported] as $key) {
         expect($service->cachedModelsForKey($key))->toBe([]);
-        expect($service->choicesForKey($key))->toBe(['auto' => 'Auto — route requests across healthy cached free models']);
+        expect($service->choicesForKey($key))->toBe(['auto' => 'Auto — route requests across healthy cached available models']);
     }
 });

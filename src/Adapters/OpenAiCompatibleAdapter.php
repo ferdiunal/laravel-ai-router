@@ -95,7 +95,7 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
     }
 
     /**
-     * Fetch free model candidates from the upstream OpenAI-compatible models endpoint.
+     * Fetch model candidates from the upstream OpenAI-compatible models endpoint.
      */
     public function models(string $apiKey): array
     {

@@ -17,17 +17,20 @@ use Illuminate\Support\Arr;
 use Throwable;
 
 /**
- * Refreshes, filters, and exposes provider-label-scoped free model cache rows for routing and default model selection.
+ * Refreshes, filters, and exposes provider-label-scoped available model cache rows for routing and default model selection.
  */
 final class ProviderModelCacheService
 {
     /**
      * Initialize the cache service with the adapter registry used for live provider model discovery.
      */
-    public function __construct(private readonly ProviderAdapterRegistry $adapters) {}
+    public function __construct(
+        private readonly ProviderAdapterRegistry $adapters,
+        private readonly ProviderModelAvailabilityPolicy $availability,
+    ) {}
 
     /**
-     * Refresh the free-model cache for a provider key using live provider data or curated fallback rows when safe.
+     * Refresh the available-model cache for a provider key using live provider data or curated fallback rows when safe.
      *
      * @return array<int, LaravelAiRouterProviderModelCache>
      */
@@ -60,7 +63,7 @@ final class ProviderModelCacheService
             $source = 'curated';
         }
 
-        $this->ensureRoutableCustomModels((string) $key->platform, $models, $source);
+        $this->ensureRoutableLiveModels((string) $key->platform, $models, $source);
 
         $this->disableCacheRows($key);
 
@@ -82,7 +85,7 @@ final class ProviderModelCacheService
                     'tpd_limit' => $model['tpd_limit'] ?? null,
                     'budget_label' => $model['budget_label'] ?? null,
                     'supports_tools' => $model['supports_tools'] ?? null,
-                    'is_free' => true,
+                    'is_free' => (bool) ($model['is_free'] ?? true),
                     'enabled' => true,
                     'source' => $source,
                     'raw_metadata' => $model['raw_metadata'] ?? null,
@@ -101,7 +104,7 @@ final class ProviderModelCacheService
     }
 
     /**
-     * Return cached free model identifiers, optionally scoped by provider and label, with optional auto routing included.
+     * Return cached available model identifiers, optionally scoped by provider and label, with optional auto routing included.
      *
      * @return array<int, string>
      */
@@ -114,7 +117,6 @@ final class ProviderModelCacheService
 
             $query = LaravelAiRouterProviderModelCache::query()
                 ->where('enabled', true)
-                ->where('is_free', true)
                 ->whereIn('platform', $routablePlatforms)
                 ->whereHas('providerKey', function ($query): void {
                     $query->where('enabled', true)
@@ -155,16 +157,18 @@ final class ProviderModelCacheService
     }
 
     /**
-     * Return the first enabled routable model identifier from the package catalog.
+     * Return the first enabled fallback model identifier from the package catalog.
      */
     public function firstAvailableModelId(): ?string
     {
-        return LaravelAiRouterModel::query()
-            ->where('enabled', true)
-            ->whereIn('platform', $this->routablePlatforms())
-            ->orderBy('intelligence_rank')
-            ->orderBy('id')
-            ->value('model_id');
+        return LaravelAiRouterFallback::query()
+            ->where('laravel_ai_router_fallbacks.enabled', true)
+            ->join('laravel_ai_router_models', 'laravel_ai_router_models.id', '=', 'laravel_ai_router_fallbacks.laravel_ai_router_model_id')
+            ->where('laravel_ai_router_models.enabled', true)
+            ->whereIn('laravel_ai_router_models.platform', $this->routablePlatforms())
+            ->orderBy('laravel_ai_router_models.intelligence_rank')
+            ->orderBy('laravel_ai_router_models.id')
+            ->value('laravel_ai_router_models.model_id');
     }
 
     /**
@@ -176,7 +180,7 @@ final class ProviderModelCacheService
     }
 
     /**
-     * Return the number of currently exposed cached free models for a healthy provider key.
+     * Return the number of currently exposed cached available models for a healthy provider key.
      */
     public function cachedCountForKey(LaravelAiRouterProviderKey $key): int
     {
@@ -188,7 +192,7 @@ final class ProviderModelCacheService
     }
 
     /**
-     * Return filtered cached free model rows for a routable, enabled, non-invalid, non-expired provider key.
+     * Return filtered cached available model rows for a routable, enabled, non-invalid, non-expired provider key.
      *
      * @return array<int, LaravelAiRouterProviderModelCache>
      */
@@ -204,7 +208,6 @@ final class ProviderModelCacheService
                 ->where('platform', $key->platform)
                 ->where('provider_label', $key->label)
                 ->where('enabled', true)
-                ->where('is_free', true)
                 ->orderBy('model_id')
                 ->get()
                 ->all();
@@ -220,13 +223,20 @@ final class ProviderModelCacheService
      */
     public function choicesForKey(LaravelAiRouterProviderKey $key, bool $includeAuto = true): array
     {
-        $choices = $includeAuto ? ['auto' => 'Auto — route requests across healthy cached free models'] : [];
+        $choices = $includeAuto ? ['auto' => 'Auto — route requests across healthy cached available models'] : [];
 
         foreach ($this->cachedModelsForKey($key) as $model) {
+            $toolSupport = match ($model->supports_tools) {
+                true => 'tools',
+                false => 'no tools',
+                default => null,
+            };
+
             $details = array_filter([
                 $model->display_name,
                 $model->context_window !== null ? 'ctx '.$model->context_window : null,
-                $model->supports_tools === true ? 'tools' : null,
+                $toolSupport,
+                $model->is_free ? 'free' : null,
                 $model->budget_label,
                 $model->source,
             ]);
@@ -238,7 +248,7 @@ final class ProviderModelCacheService
     }
 
     /**
-     * Filter live provider model rows to free candidates and enrich them with curated metadata when available.
+     * Filter live provider model rows to available candidates and enrich them with curated metadata when available.
      *
      * @param  array<int, array<string, mixed>>  $liveModels
      * @return array<int, array<string, mixed>>
@@ -252,27 +262,41 @@ final class ProviderModelCacheService
         $curated = collect($this->curatedModels($platform))->keyBy('model_id');
 
         return collect($liveModels)
-            ->filter(fn (array $model): bool => $this->looksFree($platform, (string) $model['model_id']) || $curated->has((string) $model['model_id']))
-            ->map(function (array $model) use ($curated): array {
-                $metadata = $curated->get((string) $model['model_id'], []);
+            ->filter(function (array $model) use ($platform, $curated): bool {
+                $modelId = (string) $model['model_id'];
 
-                return [
+                return $this->availability->shouldCacheLiveModel($platform, $model, $curated->has($modelId));
+            })
+            ->map(function (array $model) use ($platform, $curated): array {
+                $modelId = (string) $model['model_id'];
+                $metadata = $curated->get($modelId, []);
+                $merged = [
                     ...$metadata,
                     ...Arr::whereNotNull($model),
-                    'model_id' => (string) $model['model_id'],
-                    'display_name' => (string) ($metadata['display_name'] ?? $model['display_name'] ?? $model['model_id']),
+                    'model_id' => $modelId,
+                    'display_name' => (string) ($metadata['display_name'] ?? $model['display_name'] ?? $modelId),
                 ];
+
+                $isFree = $this->availability->isFree($platform, $merged, $metadata !== []);
+                $budgetLabel = $this->availability->budgetLabel($platform, $merged, $isFree);
+                if ($budgetLabel !== null) {
+                    $merged['budget_label'] = $budgetLabel;
+                }
+
+                $merged['is_free'] = $isFree;
+
+                return $merged;
             })
             ->values()
             ->all();
     }
 
     /**
-     * Create runtime model and fallback rows for live custom-provider models that can be routed by the package.
+     * Create runtime model and fallback rows for live models that can be routed by the package.
      *
      * @param  array<int, array<string, mixed>>  $models
      */
-    private function ensureRoutableCustomModels(string $platform, array $models, string $source): void
+    private function ensureRoutableLiveModels(string $platform, array $models, string $source): void
     {
         if ($source !== 'live' || $models === []) {
             return;
@@ -284,7 +308,7 @@ final class ProviderModelCacheService
             return;
         }
 
-        if (($definition['custom'] ?? false) !== true) {
+        if (! $this->availability->shouldCreateRoutableModelRow($platform, $definition)) {
             return;
         }
 
@@ -304,7 +328,7 @@ final class ProviderModelCacheService
                     'rpd_limit' => $model['rpd_limit'] ?? null,
                     'tpm_limit' => $model['tpm_limit'] ?? null,
                     'tpd_limit' => $model['tpd_limit'] ?? null,
-                    'budget_label' => $model['budget_label'] ?? 'custom',
+                    'budget_label' => $model['budget_label'] ?? null,
                     'context_window' => $model['context_window'] ?? null,
                     'enabled' => true,
                 ],
@@ -318,8 +342,12 @@ final class ProviderModelCacheService
                 $fallback->priority = $nextPriority++;
             }
 
+            $autoEligible = $this->availability->shouldEnableAutoFallback($platform, $definition, $model);
+            $enabledForAuto = (bool) ($model['is_free'] ?? false)
+                && ($autoEligible || ($fallback->exists && (bool) $fallback->enabled));
+
             $fallback->forceFill([
-                'enabled' => true,
+                'enabled' => $enabledForAuto,
                 'penalty' => 0,
             ])->save();
         }
@@ -340,18 +368,6 @@ final class ProviderModelCacheService
     }
 
     /**
-     * Infer whether a live provider model identifier should be treated as free for cache exposure.
-     */
-    private function looksFree(string $platform, string $modelId): bool
-    {
-        if (str_ends_with($modelId, ':free')) {
-            return true;
-        }
-
-        return in_array($platform, ['kilo', 'pollinations', 'llm7'], true);
-    }
-
-    /**
      * Persist provider-key invalidation metadata after an authentication failure.
      */
     private function markKeyInvalid(LaravelAiRouterProviderKey $key): void
@@ -363,7 +379,7 @@ final class ProviderModelCacheService
     }
 
     /**
-     * Determine whether a provider key is allowed to expose cached free models to routing or default selection.
+     * Determine whether a provider key is allowed to expose cached available models to routing or default selection.
      */
     private function keyCanExposeCachedModels(LaravelAiRouterProviderKey $key): bool
     {

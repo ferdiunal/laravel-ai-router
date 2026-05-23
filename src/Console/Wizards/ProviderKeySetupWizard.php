@@ -38,7 +38,7 @@ final class ProviderKeySetupWizard
     {
         $platform = $this->providerPrompt($interactive);
         $definition = ProviderCatalog::get($platform);
-        $placeholder = ($definition['requires_placeholder_key'] ?? false) ? 'anonymous-placeholder' : '';
+        $placeholder = ($definition['requires_placeholder_key'] ?? false) ? ProviderKeyManager::ANONYMOUS_PLACEHOLDER_KEY : '';
         $apiKey = $this->apiKeyPrompt($interactive, $placeholder);
         $label = $this->labelPrompt($interactive);
 
@@ -89,7 +89,7 @@ final class ProviderKeySetupWizard
      */
     private function apiKeyPrompt(bool $interactive, string $default): string
     {
-        return $interactive ? password('API key', required: true) : $default;
+        return $interactive ? password('API key', required: $default === '') : $default;
     }
 
     /**

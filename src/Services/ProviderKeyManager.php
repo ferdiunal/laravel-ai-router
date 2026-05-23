@@ -13,6 +13,8 @@ use Illuminate\Validation\ValidationException;
  */
 final class ProviderKeyManager
 {
+    public const ANONYMOUS_PLACEHOLDER_KEY = 'anonymous-placeholder';
+
     /**
      * Initialize the manager with the service that refreshes provider-label model caches.
      */
@@ -23,11 +25,20 @@ final class ProviderKeyManager
      */
     public function add(string $platform, string $apiKey, string $label, bool $refreshModels = true): LaravelAiRouterProviderKey
     {
-        ProviderCatalog::get($platform);
+        $definition = ProviderCatalog::get($platform);
 
         $label = trim($label);
         if ($label === '') {
             throw ValidationException::withMessages(['label' => 'Provider label is required.']);
+        }
+
+        $apiKey = trim($apiKey);
+        if ($apiKey === '') {
+            if ((bool) ($definition['requires_placeholder_key'] ?? false)) {
+                $apiKey = self::ANONYMOUS_PLACEHOLDER_KEY;
+            } else {
+                throw ValidationException::withMessages(['api_key' => "API key is required for provider [{$platform}]."]);
+            }
         }
 
         $exists = LaravelAiRouterProviderKey::query()

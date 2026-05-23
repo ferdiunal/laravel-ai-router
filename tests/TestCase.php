@@ -30,6 +30,12 @@ abstract class TestCase extends Orchestra
             'prefix' => '',
             'foreign_key_constraints' => true,
         ]);
+        $app['config']->set('database.connections.ai-dev-api', [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+            'foreign_key_constraints' => true,
+        ]);
 
         $app['config']->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
     }

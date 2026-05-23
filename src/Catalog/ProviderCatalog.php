@@ -108,7 +108,7 @@ final class ProviderCatalog
     private static function customFromDatabase(): array
     {
         try {
-            if (! Schema::hasTable('ai_dev_api_provider_definitions')) {
+            if (! Schema::connection((config('ai-dev-api.database.connection') ?: 'ai-dev-api'))->hasTable('ai_dev_api_provider_definitions')) {
                 return [];
             }
 

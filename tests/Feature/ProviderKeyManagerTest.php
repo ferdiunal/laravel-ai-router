@@ -8,7 +8,7 @@ use Illuminate\Validation\ValidationException;
 
 function migrateAiDevApiForProviderKeyTests(): void
 {
-    foreach (glob(__DIR__.'/../../database/migrations/*.php.stub') as $migrationFile) {
+    foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
         $migration->up();
     }

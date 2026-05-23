@@ -27,6 +27,8 @@ final class AiDevApiServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/ai-dev-api.php', 'ai-dev-api');
+        $this->normalizeDatabaseConfig();
+        $this->registerAiDevApiDatabaseConnection();
 
         $this->app->singleton(AiDevApiTextGateway::class);
 
@@ -63,20 +65,33 @@ final class AiDevApiServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__.'/../config/ai-dev-api.php' => config_path('ai-dev-api.php'),
             ], ['ai-dev-api', 'ai-dev-api-config']);
-
-            $this->publishes($this->migrationPublishes(), ['ai-dev-api', 'ai-dev-api-migrations']);
         }
     }
 
-    /** @return array<string, string> */
-    private function migrationPublishes(): array
+    private function normalizeDatabaseConfig(): void
     {
-        $publishes = [];
-
-        foreach (glob(__DIR__.'/../database/migrations/*.php.stub') ?: [] as $source) {
-            $publishes[$source] = database_path('migrations/'.basename($source, '.stub'));
+        if (! config('ai-dev-api.database.connection')) {
+            config()->set('ai-dev-api.database.connection', 'ai-dev-api');
         }
 
-        return $publishes;
+        if (! config('ai-dev-api.database.sqlite.database')) {
+            config()->set('ai-dev-api.database.sqlite.database', database_path('ai-dev-api.sqlite'));
+        }
+    }
+
+    private function registerAiDevApiDatabaseConnection(): void
+    {
+        $connection = (string) (config('ai-dev-api.database.connection') ?: 'ai-dev-api');
+
+        if ($connection !== 'ai-dev-api' || config('database.connections.ai-dev-api') !== null) {
+            return;
+        }
+
+        config()->set('database.connections.ai-dev-api', [
+            'driver' => 'sqlite',
+            'database' => config('ai-dev-api.database.sqlite.database', database_path('ai-dev-api.sqlite')),
+            'prefix' => '',
+            'foreign_key_constraints' => true,
+        ]);
     }
 }

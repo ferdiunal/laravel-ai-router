@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Ferdiunal\AiDevApi\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
@@ -13,7 +12,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-final class AiDevApiSetting extends Model
+final class AiDevApiSetting extends AiDevApiBaseModel
 {
     protected $table = 'ai_dev_api_settings';
 

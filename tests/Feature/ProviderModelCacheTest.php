@@ -12,7 +12,7 @@ use Laravel\Ai\AiManager;
 
 function migrateAiDevApiForCacheTests(): void
 {
-    foreach (glob(__DIR__.'/../../database/migrations/*.php.stub') as $migrationFile) {
+    foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
         $migration->up();
     }
@@ -90,6 +90,21 @@ it('marks provider keys invalid on model refresh auth failures without falling b
     expect(AiDevApiProviderModelCache::query()->where('provider_key_id', $key->getKey())->where('enabled', true)->count())->toBe(0);
 });
 
+it('does not cache models for providers without a routable adapter', function () {
+    migrateAiDevApiForCacheTests();
+
+    $key = AiDevApiProviderKey::query()->create([
+        'platform' => 'google',
+        'label' => 'Unsupported',
+        'key' => 'key-google-value-123456',
+        'status' => 'unknown',
+        'enabled' => true,
+    ]);
+
+    expect(app(ProviderModelCacheService::class)->refreshForKey($key))->toBe([]);
+    expect(AiDevApiProviderModelCache::query()->where('provider_key_id', $key->getKey())->count())->toBe(0);
+});
+
 it('excludes expired provider label model cache rows from model listings', function () {
     migrateAiDevApiForCacheTests();
 
@@ -116,8 +131,55 @@ it('excludes expired provider label model cache rows from model listings', funct
     ]);
 
     $provider = app(AiManager::class)->textProvider('ai-dev-api');
+    $modelCache = app(ProviderModelCacheService::class);
 
     expect($provider)->toBeInstanceOf(AiDevApiProvider::class);
     assert($provider instanceof AiDevApiProvider);
     expect($provider->models('openrouter', 'Primary', includeAuto: false))->toBe([]);
+    expect($modelCache->cachedModelsForKey($key))->toBe([]);
+    expect($modelCache->choicesForKey($key))->toBe(['auto' => 'Auto — route requests across healthy cached free models']);
+});
+
+it('exposes cached model choices only for routable healthy provider keys', function () {
+    migrateAiDevApiForCacheTests();
+
+    $makeKeyWithCache = function (string $platform, string $label, string $status = 'healthy', bool $enabled = true): AiDevApiProviderKey {
+        $key = AiDevApiProviderKey::query()->create([
+            'platform' => $platform,
+            'label' => $label,
+            'key' => 'key-'.$platform.'-'.$label.'-value-123456',
+            'status' => $status,
+            'enabled' => $enabled,
+            'models_cached_at' => now(),
+            'models_cache_expires_at' => now()->addHour(),
+        ]);
+
+        AiDevApiProviderModelCache::query()->create([
+            'provider_key_id' => $key->getKey(),
+            'platform' => $platform,
+            'provider_label' => $label,
+            'model_id' => strtolower($label).'/model:free',
+            'display_name' => $label.' Model',
+            'is_free' => true,
+            'enabled' => true,
+            'source' => 'live',
+            'checked_at' => now(),
+        ]);
+
+        return $key;
+    };
+
+    $service = app(ProviderModelCacheService::class);
+    $usable = $makeKeyWithCache('openrouter', 'Usable');
+    $invalid = $makeKeyWithCache('openrouter', 'Invalid', status: 'invalid');
+    $disabled = $makeKeyWithCache('openrouter', 'Disabled', enabled: false);
+    $unsupported = $makeKeyWithCache('google', 'Unsupported');
+
+    expect($service->cachedModelsForKey($usable))->toHaveCount(1);
+    expect($service->choicesForKey($usable))->toHaveKey('usable/model:free');
+
+    foreach ([$invalid, $disabled, $unsupported] as $key) {
+        expect($service->cachedModelsForKey($key))->toBe([]);
+        expect($service->choicesForKey($key))->toBe(['auto' => 'Auto — route requests across healthy cached free models']);
+    }
 });

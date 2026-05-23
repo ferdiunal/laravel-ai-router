@@ -106,7 +106,7 @@ final class RateLimitWindowRepository
     {
         $window = $this->windowBounds($type);
 
-        DB::transaction(function () use ($platform, $modelId, $keyId, $type, $requests, $tokens, $window): void {
+        DB::connection(config('ai-dev-api.database.connection') ?: 'ai-dev-api')->transaction(function () use ($platform, $modelId, $keyId, $type, $requests, $tokens, $window): void {
             $row = AiDevApiRateWindow::query()
                 ->where('platform', $platform)
                 ->where('model_id', $modelId)

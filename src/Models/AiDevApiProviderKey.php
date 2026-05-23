@@ -6,7 +6,6 @@ namespace Ferdiunal\AiDevApi\Models;
 
 use Ferdiunal\AiDevApi\Support\KeyMasker;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
@@ -27,7 +26,7 @@ use Illuminate\Support\Facades\Crypt;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-final class AiDevApiProviderKey extends Model
+final class AiDevApiProviderKey extends AiDevApiBaseModel
 {
     protected $table = 'ai_dev_api_provider_keys';
 

@@ -88,7 +88,7 @@ final class ProviderDefinitionManager
 
     public function remove(int $id): bool
     {
-        return DB::transaction(function () use ($id): bool {
+        return DB::connection(config('ai-dev-api.database.connection') ?: 'ai-dev-api')->transaction(function () use ($id): bool {
             $definition = AiDevApiProviderDefinition::query()->find($id);
             if (! $definition instanceof AiDevApiProviderDefinition) {
                 return false;
@@ -102,7 +102,7 @@ final class ProviderDefinitionManager
 
     public function setEnabled(int $id, bool $enabled): AiDevApiProviderDefinition
     {
-        return DB::transaction(function () use ($id, $enabled): AiDevApiProviderDefinition {
+        return DB::connection(config('ai-dev-api.database.connection') ?: 'ai-dev-api')->transaction(function () use ($id, $enabled): AiDevApiProviderDefinition {
             $definition = AiDevApiProviderDefinition::query()->findOrFail($id);
             $definition->forceFill(['enabled' => $enabled])->save();
 

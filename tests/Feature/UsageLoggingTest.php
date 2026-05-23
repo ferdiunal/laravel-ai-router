@@ -11,7 +11,7 @@ use Laravel\Ai\Promptable;
 
 function migrateAiDevApiForUsageTests(): void
 {
-    foreach (glob(__DIR__.'/../../database/migrations/*.php.stub') as $migrationFile) {
+    foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
         $migration->up();
     }

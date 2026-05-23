@@ -10,7 +10,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('ai_dev_api_fallbacks', function (Blueprint $table): void {
+        $schema = Schema::connection((config('ai-dev-api.database.connection') ?: 'ai-dev-api'));
+
+        if ($schema->hasTable('ai_dev_api_fallbacks')) {
+            return;
+        }
+
+        $schema->create('ai_dev_api_fallbacks', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('ai_dev_api_model_id')->constrained('ai_dev_api_models')->cascadeOnDelete();
             $table->unsignedInteger('priority');
@@ -26,6 +32,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('ai_dev_api_fallbacks');
+        Schema::connection((config('ai-dev-api.database.connection') ?: 'ai-dev-api'))->dropIfExists('ai_dev_api_fallbacks');
     }
 };

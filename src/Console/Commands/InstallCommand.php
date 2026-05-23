@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Ferdiunal\AiDevApi\Console\Commands;
 
-use Ferdiunal\AiDevApi\AiDevApiServiceProvider;
 use Ferdiunal\AiDevApi\Catalog\SeedModelCatalog;
 use Ferdiunal\AiDevApi\Console\Concerns\InteractsWithProviderPrompts;
+use Ferdiunal\AiDevApi\Console\Wizards\ProviderKeySetupWizard;
+use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
 use Ferdiunal\AiDevApi\Services\SqliteOptimizer;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
@@ -21,45 +22,74 @@ final class InstallCommand extends Command
 
     protected $signature = 'ai-dev-api:install';
 
-    protected $description = 'Interactively publish AI Dev API config/migrations and seed the model catalog.';
+    protected $description = 'Prepare AI Dev API local storage and optionally add a provider key.';
 
-    public function handle(SeedModelCatalog $seedModelCatalog, SqliteOptimizer $sqliteOptimizer): int
-    {
-        if ($this->confirmPrompt('Publish AI Dev API config?', true)) {
-            $this->callSilent('vendor:publish', [
-                '--provider' => AiDevApiServiceProvider::class,
-                '--tag' => 'ai-dev-api-config',
-            ]);
-            info('Config published.');
+    public function handle(
+        SeedModelCatalog $seedModelCatalog,
+        SqliteOptimizer $sqliteOptimizer,
+        ProviderKeySetupWizard $providerWizard,
+    ): int {
+        $connection = (string) (config('ai-dev-api.database.connection') ?: 'ai-dev-api');
+
+        info('Preparing AI Dev API local storage.');
+        $database = $this->ensureSqliteDatabaseFile($connection);
+        if ($database !== null) {
+            info('Local SQLite storage ready: '.$database);
         }
 
-        if ($this->confirmPrompt('Publish AI Dev API migrations?', true)) {
-            $this->callSilent('vendor:publish', [
-                '--provider' => AiDevApiServiceProvider::class,
-                '--tag' => 'ai-dev-api-migrations',
-            ]);
-            info('Migrations published.');
-        }
+        $this->runInternalMigrations($connection);
+        info('Internal database tables are ready.');
 
-        if ($this->confirmPrompt('Run migrations now?', false)) {
-            Artisan::call('migrate', ['--force' => true]);
-            info('Migrations executed.');
-        }
-
-        if ($this->confirmPrompt('Seed curated free model catalog?', true) && Schema::hasTable('ai_dev_api_models')) {
+        if (Schema::connection($connection)->hasTable('ai_dev_api_models')) {
             $seedModelCatalog->seed();
-            info('Curated model catalog seeded.');
-        } elseif (! Schema::hasTable('ai_dev_api_models')) {
-            info('Run migrations before seeding the curated model catalog.');
+            info('Curated free model catalog seeded.');
         }
 
-        if ($this->confirmPrompt('Apply SQLite optimizations when applicable?', true)) {
-            $applied = $sqliteOptimizer->optimize();
-            info('SQLite optimizer checked'.($applied === [] ? ' (no-op).' : ': '.implode(', ', $applied)));
+        $applied = $sqliteOptimizer->optimize($connection);
+        info('SQLite optimizer checked'.($applied === [] ? ' (no-op).' : ': '.implode(', ', $applied)));
+
+        if ($this->shouldPrompt()) {
+            $hasProviderKeys = AiDevApiProviderKey::query()->exists();
+            if (! $hasProviderKeys || $this->confirmPrompt('Add another provider key now?', false)) {
+                $providerWizard->run(true);
+            }
         }
 
         outro('AI Dev API install flow completed.');
 
         return self::SUCCESS;
+    }
+
+    private function ensureSqliteDatabaseFile(string $connection): ?string
+    {
+        if (config("database.connections.{$connection}.driver") !== 'sqlite') {
+            return null;
+        }
+
+        $database = (string) config("database.connections.{$connection}.database", '');
+        if ($database === '' || $database === ':memory:') {
+            return null;
+        }
+
+        $directory = dirname($database);
+        if (! is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        if (! file_exists($database)) {
+            touch($database);
+        }
+
+        return $database;
+    }
+
+    private function runInternalMigrations(string $connection): void
+    {
+        Artisan::call('migrate', [
+            '--database' => $connection,
+            '--path' => dirname(__DIR__, 3).'/database/migrations',
+            '--realpath' => true,
+            '--force' => true,
+        ]);
     }
 }

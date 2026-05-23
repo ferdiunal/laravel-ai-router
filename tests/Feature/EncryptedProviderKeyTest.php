@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
 
 it('encrypts provider keys and exposes only masked values', function () {
-    foreach (glob(__DIR__.'/../../database/migrations/*.php.stub') as $migrationFile) {
+    foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
         $migration->up();
     }

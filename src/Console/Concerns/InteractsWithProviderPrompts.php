@@ -11,7 +11,6 @@ use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\password;
 use function Laravel\Prompts\search;
-use function Laravel\Prompts\select;
 use function Laravel\Prompts\text;
 
 trait InteractsWithProviderPrompts
@@ -34,6 +33,7 @@ trait InteractsWithProviderPrompts
     protected function providerPrompt(string $label = 'Provider'): string
     {
         $options = collect(ProviderCatalog::all())
+            ->filter(fn (array $definition): bool => in_array($definition['adapter'] ?? null, ['openai-compatible', 'cohere'], true))
             ->mapWithKeys(fn (array $definition, string $platform): array => [$platform => "{$definition['name']} ({$platform})"])
             ->all();
 
@@ -41,7 +41,39 @@ trait InteractsWithProviderPrompts
             return (string) array_key_first($options);
         }
 
-        return (string) select($label, $options, default: array_key_first($options), scroll: 10);
+        return (string) search(
+            label: $label,
+            options: fn (string $value): array => collect($options)
+                ->filter(fn (string $description, string $platform): bool => str_contains(strtolower($platform.' '.$description), strtolower($value)))
+                ->all(),
+            placeholder: 'Search provider name or platform',
+            scroll: 10,
+        );
+    }
+
+    /** @param array<string, string> $options */
+    protected function modelPrompt(array $options, string $label = 'Which model should be default?', string $default = 'auto'): string
+    {
+        if ($options === []) {
+            return 'auto';
+        }
+
+        if (! array_key_exists($default, $options)) {
+            $default = (string) array_key_first($options);
+        }
+
+        if (! $this->shouldPrompt()) {
+            return $default;
+        }
+
+        return (string) search(
+            label: $label,
+            options: fn (string $value): array => collect($options)
+                ->filter(fn (string $description, string $modelId): bool => str_contains(strtolower($modelId.' '.$description), strtolower($value)))
+                ->all(),
+            placeholder: 'Search model id, label, provider, or capability',
+            scroll: 10,
+        );
     }
 
     protected function keyPrompt(string $label = 'Provider key'): ?AiDevApiProviderKey
@@ -92,7 +124,7 @@ trait InteractsWithProviderPrompts
         return $definitions->firstWhere('id', (int) $selected);
     }
 
-    private function shouldPrompt(): bool
+    protected function shouldPrompt(): bool
     {
         return $this->input->isInteractive() && ! app()->runningUnitTests();
     }

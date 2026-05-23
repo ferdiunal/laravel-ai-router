@@ -10,7 +10,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('ai_dev_api_models', function (Blueprint $table): void {
+        $schema = Schema::connection((config('ai-dev-api.database.connection') ?: 'ai-dev-api'));
+
+        if ($schema->hasTable('ai_dev_api_models')) {
+            return;
+        }
+
+        $schema->create('ai_dev_api_models', function (Blueprint $table): void {
             $table->id();
             $table->string('platform');
             $table->string('model_id');
@@ -33,6 +39,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('ai_dev_api_models');
+        Schema::connection((config('ai-dev-api.database.connection') ?: 'ai-dev-api'))->dropIfExists('ai_dev_api_models');
     }
 };

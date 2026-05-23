@@ -23,7 +23,7 @@ use Laravel\Ai\Tools\Request as ToolRequest;
 
 function migrateAiDevApiForSdkParityTests(): void
 {
-    foreach (glob(__DIR__.'/../../database/migrations/*.php.stub') as $migrationFile) {
+    foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
         $migration->up();
     }

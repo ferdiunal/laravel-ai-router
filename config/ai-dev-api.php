@@ -26,8 +26,9 @@ return [
     ],
 
     'database' => [
-        'connection' => env('AI_DEV_API_DB_CONNECTION'),
+        'connection' => env('AI_DEV_API_DB_CONNECTION', 'ai-dev-api'),
         'sqlite' => [
+            'database' => env('AI_DEV_API_SQLITE_DATABASE', database_path('ai-dev-api.sqlite')),
             'optimize' => env('AI_DEV_API_SQLITE_OPTIMIZE', true),
             'journal_mode' => env('AI_DEV_API_SQLITE_JOURNAL_MODE', 'WAL'),
             'synchronous' => env('AI_DEV_API_SQLITE_SYNCHRONOUS', 'NORMAL'),

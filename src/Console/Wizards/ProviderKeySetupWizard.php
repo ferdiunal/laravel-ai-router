@@ -1,0 +1,103 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Ferdiunal\AiDevApi\Console\Wizards;
+
+use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
+use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
+use Ferdiunal\AiDevApi\Services\ModelPreferenceManager;
+use Ferdiunal\AiDevApi\Services\ProviderKeyManager;
+use Ferdiunal\AiDevApi\Services\ProviderModelCacheService;
+
+use function Laravel\Prompts\info;
+use function Laravel\Prompts\outro;
+use function Laravel\Prompts\password;
+use function Laravel\Prompts\search;
+use function Laravel\Prompts\text;
+use function Laravel\Prompts\warning;
+
+final class ProviderKeySetupWizard
+{
+    public function __construct(
+        private readonly ProviderKeyManager $keys,
+        private readonly ProviderModelCacheService $modelCache,
+        private readonly ModelPreferenceManager $preferences,
+    ) {}
+
+    public function run(bool $interactive): AiDevApiProviderKey
+    {
+        $platform = $this->providerPrompt($interactive);
+        $definition = ProviderCatalog::get($platform);
+        $placeholder = ($definition['requires_placeholder_key'] ?? false) ? 'anonymous-placeholder' : '';
+        $apiKey = $this->apiKeyPrompt($interactive, $placeholder);
+        $label = $this->labelPrompt($interactive);
+
+        $key = $this->keys->add($platform, $apiKey !== '' ? $apiKey : $placeholder, $label, refreshModels: true);
+
+        info("Added {$key->platform} / {$key->label} ({$key->masked_key}).");
+
+        $choices = $this->modelCache->choicesForKey($key);
+        if (count($choices) <= 1) {
+            warning('No cached free models found for this provider key yet. Defaulting to auto routing.');
+        }
+
+        $selectedModel = $this->modelPrompt($interactive, $choices);
+        $this->preferences->setDefaultTextModel($selectedModel);
+        info("Default text model set to {$selectedModel}.");
+
+        outro('Provider key saved and model preference updated.');
+
+        return $key;
+    }
+
+    private function providerPrompt(bool $interactive): string
+    {
+        $options = collect(ProviderCatalog::all())
+            ->filter(fn (array $definition): bool => in_array($definition['adapter'] ?? null, ['openai-compatible', 'cohere'], true))
+            ->mapWithKeys(fn (array $definition, string $platform): array => [$platform => "{$definition['name']} ({$platform})"])
+            ->all();
+
+        if (! $interactive) {
+            return (string) array_key_first($options);
+        }
+
+        return (string) search(
+            label: 'Which provider should be added?',
+            options: fn (string $value): array => collect($options)
+                ->filter(fn (string $description, string $platform): bool => str_contains(strtolower($platform.' '.$description), strtolower($value)))
+                ->all(),
+            placeholder: 'Search provider name or platform',
+            scroll: 10,
+        );
+    }
+
+    private function apiKeyPrompt(bool $interactive, string $default): string
+    {
+        return $interactive ? password('API key', required: true) : $default;
+    }
+
+    private function labelPrompt(bool $interactive): string
+    {
+        return $interactive ? text('Label', default: 'Primary', required: true) : 'Primary';
+    }
+
+    /** @param array<string, string> $options */
+    private function modelPrompt(bool $interactive, array $options): string
+    {
+        $options = $options !== [] ? $options : ['auto' => 'Auto — route requests across healthy cached free models'];
+
+        if (! $interactive) {
+            return array_key_exists('auto', $options) ? 'auto' : (string) array_key_first($options);
+        }
+
+        return (string) search(
+            label: 'Which model should be the default?',
+            options: fn (string $value): array => collect($options)
+                ->filter(fn (string $description, string $modelId): bool => str_contains(strtolower($modelId.' '.$description), strtolower($value)))
+                ->all(),
+            placeholder: 'Search model id, label, provider, or capability',
+            scroll: 10,
+        );
+    }
+}

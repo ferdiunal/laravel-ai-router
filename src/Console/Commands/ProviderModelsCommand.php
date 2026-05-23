@@ -6,6 +6,7 @@ namespace Ferdiunal\AiDevApi\Console\Commands;
 
 use Ferdiunal\AiDevApi\Console\Concerns\InteractsWithProviderPrompts;
 use Ferdiunal\AiDevApi\Models\AiDevApiProviderModelCache;
+use Ferdiunal\AiDevApi\Services\ModelPreferenceManager;
 use Ferdiunal\AiDevApi\Services\ProviderModelCacheService;
 use Illuminate\Console\Command;
 
@@ -19,9 +20,9 @@ final class ProviderModelsCommand extends Command
 
     protected $signature = 'ai-dev-api:provider:models';
 
-    protected $description = 'List or refresh cached free models for a provider key.';
+    protected $description = 'List, refresh, search, and select cached free models for a provider key.';
 
-    public function handle(ProviderModelCacheService $modelCache): int
+    public function handle(ProviderModelCacheService $modelCache, ModelPreferenceManager $preferences): int
     {
         $key = $this->keyPrompt('Which provider key models should be shown?');
         if ($key === null) {
@@ -32,25 +33,29 @@ final class ProviderModelsCommand extends Command
 
         if ($this->confirmPrompt('Refresh model cache first?', false)) {
             $modelCache->refreshForKey($key);
+            $key->refresh();
             info('Model cache refreshed.');
         }
 
-        $rows = AiDevApiProviderModelCache::query()
-            ->where('provider_key_id', $key->getKey())
-            ->where('enabled', true)
-            ->orderBy('model_id')
-            ->get()
+        $rows = collect($modelCache->cachedModelsForKey($key))
             ->map(fn (AiDevApiProviderModelCache $model): array => [
                 $model->model_id,
                 $model->display_name ?? '-',
                 (string) ($model->context_window ?? '-'),
+                $model->supports_tools === true ? 'yes' : 'no',
                 $model->budget_label ?? '-',
                 $model->source,
                 optional($model->checked_at)->toDateTimeString() ?? '-',
             ])
             ->all();
 
-        table(['Model ID', 'Label', 'Context', 'Budget', 'Source', 'Checked At'], $rows);
+        table(['Model ID', 'Label', 'Context', 'Tools', 'Budget', 'Source', 'Checked At'], $rows);
+
+        if ($rows !== [] && $this->confirmPrompt('Select a default model from these cached models?', true)) {
+            $selectedModel = $this->modelPrompt($modelCache->choicesForKey($key), default: 'auto');
+            $preferences->setDefaultTextModel($selectedModel);
+            info("Default text model set to {$selectedModel}.");
+        }
 
         return self::SUCCESS;
     }

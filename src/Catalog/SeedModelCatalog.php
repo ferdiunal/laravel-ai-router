@@ -12,7 +12,7 @@ final class SeedModelCatalog
 {
     public function seed(): void
     {
-        DB::transaction(function (): void {
+        DB::connection(config('ai-dev-api.database.connection') ?: 'ai-dev-api')->transaction(function (): void {
             foreach (ModelCatalog::all() as $model) {
                 AiDevApiModel::query()->updateOrCreate(
                     [

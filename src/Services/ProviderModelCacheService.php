@@ -26,10 +26,14 @@ final class ProviderModelCacheService
         $models = [];
         $source = 'live';
 
+        if (! $this->adapters->has($key->platform)) {
+            $this->disableCacheRows($key);
+
+            return [];
+        }
+
         try {
-            if ($this->adapters->has($key->platform)) {
-                $models = $this->adapters->for($key->platform)->models((string) $key->key);
-            }
+            $models = $this->adapters->for($key->platform)->models((string) $key->key);
         } catch (ProviderAuthenticationException) {
             $this->disableCacheRows($key);
             $this->markKeyInvalid($key);
@@ -153,15 +157,53 @@ final class ProviderModelCacheService
 
     public function cachedCountForKey(AiDevApiProviderKey $key): int
     {
-        if ($key->models_cache_expires_at !== null && $key->models_cache_expires_at->isPast()) {
+        if (! $this->keyCanExposeCachedModels($key)) {
             return 0;
         }
 
-        return (int) AiDevApiProviderModelCache::query()
-            ->where('provider_key_id', $key->getKey())
-            ->where('enabled', true)
-            ->where('is_free', true)
-            ->count();
+        return count($this->cachedModelsForKey($key));
+    }
+
+    /** @return array<int, AiDevApiProviderModelCache> */
+    public function cachedModelsForKey(AiDevApiProviderKey $key): array
+    {
+        if (! $this->keyCanExposeCachedModels($key)) {
+            return [];
+        }
+
+        try {
+            return AiDevApiProviderModelCache::query()
+                ->where('provider_key_id', $key->getKey())
+                ->where('platform', $key->platform)
+                ->where('provider_label', $key->label)
+                ->where('enabled', true)
+                ->where('is_free', true)
+                ->orderBy('model_id')
+                ->get()
+                ->all();
+        } catch (QueryException) {
+            return [];
+        }
+    }
+
+    /** @return array<string, string> */
+    public function choicesForKey(AiDevApiProviderKey $key, bool $includeAuto = true): array
+    {
+        $choices = $includeAuto ? ['auto' => 'Auto — route requests across healthy cached free models'] : [];
+
+        foreach ($this->cachedModelsForKey($key) as $model) {
+            $details = array_filter([
+                $model->display_name,
+                $model->context_window !== null ? 'ctx '.$model->context_window : null,
+                $model->supports_tools === true ? 'tools' : null,
+                $model->budget_label,
+                $model->source,
+            ]);
+
+            $choices[$model->model_id] = $model->platform.' / '.$model->provider_label.' — '.implode(' · ', $details);
+        }
+
+        return $choices;
     }
 
     /**
@@ -273,6 +315,19 @@ final class ProviderModelCacheService
             'status' => 'invalid',
             'last_checked_at' => now(),
         ])->save();
+    }
+
+    private function keyCanExposeCachedModels(AiDevApiProviderKey $key): bool
+    {
+        if (! in_array($key->platform, $this->routablePlatforms(), true)) {
+            return false;
+        }
+
+        if (! $key->enabled || $key->status === 'invalid') {
+            return false;
+        }
+
+        return $key->models_cache_expires_at === null || ! $key->models_cache_expires_at->isPast();
     }
 
     private function disableCacheRows(AiDevApiProviderKey $key): void

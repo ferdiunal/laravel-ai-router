@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Ferdiunal\AiDevApi\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
@@ -30,7 +29,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-final class AiDevApiProviderModelCache extends Model
+final class AiDevApiProviderModelCache extends AiDevApiBaseModel
 {
     protected $table = 'ai_dev_api_provider_model_caches';
 

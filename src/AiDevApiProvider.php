@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ferdiunal\AiDevApi;
 
+use Ferdiunal\AiDevApi\Services\ModelPreferenceManager;
 use Ferdiunal\AiDevApi\Services\ProviderModelCacheService;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Providers\Concerns\GeneratesText;
@@ -19,7 +20,9 @@ final class AiDevApiProvider extends Provider implements TextProvider
 
     public function defaultTextModel(): string
     {
-        return (string) data_get($this->config, 'models.text.default', config('ai-dev-api.models.text.default', 'auto'));
+        $fallback = (string) data_get($this->config, 'models.text.default', config('ai-dev-api.models.text.default', 'auto'));
+
+        return app(ModelPreferenceManager::class)->defaultTextModel($fallback);
     }
 
     public function cheapestTextModel(): string

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Ferdiunal\AiDevApi\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
@@ -27,7 +26,7 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed>|null $metadata
  * @property Carbon|null $created_at
  */
-final class AiDevApiRequest extends Model
+final class AiDevApiRequest extends AiDevApiBaseModel
 {
     public const UPDATED_AT = null;
 

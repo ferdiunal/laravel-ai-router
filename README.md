@@ -26,15 +26,26 @@ composer require ferdiunal/ai-dev-api
 php artisan ai-dev-api:install
 ```
 
-Install komutu config/migration publish eder, migration çalıştırmayı sorar, model catalog seed eder ve SQLite kullanılıyorsa optimizer uygular.
+Install komutu varsayılan olarak `database/ai-dev-api.sqlite` dosyasını hazırlar, paketin internal migration'larını çalıştırır, model catalog'u seed eder, SQLite optimizer'ı uygular ve interaktif ortamda direkt provider/API key + model seçim akışına götürür. Kullanıcının `database/migrations` altına AI Dev API migration dosyası publish etmesine gerek yoktur.
 
-Manuel publish istersen:
+Sadece ileri seviye config override gerekiyorsa config publish edebilirsin:
 
 ```bash
 php artisan vendor:publish --tag=ai-dev-api-config
-php artisan vendor:publish --tag=ai-dev-api-migrations
-php artisan migrate
 ```
+
+Özel SQLite path veya mevcut host connection kullanımı:
+
+```env
+# Varsayılan paket connection adı ai-dev-api'dir ve dedicated SQLite dosyasını kullanır.
+AI_DEV_API_SQLITE_DATABASE=/absolute/path/ai-dev-api.sqlite
+
+# Host uygulamanın mevcut bir connection'ını kullanmak istersen buraya mysql/pgsql/sqlite gibi
+# config/database.php içinde tanımlı host connection adını yaz; `ai-dev-api` varsayılan dedicated connection'dır.
+AI_DEV_API_DB_CONNECTION=mysql
+```
+
+Önceki sürümlerde package migration stub'larını host `database/migrations` altına publish ettiysen yeni install akışı onları tekrar publish etmez ve mevcut host tablolarını otomatik taşımaz. Eski provider key/usage verisini korumak istiyorsan önce backup alıp host tablolarından dedicated `ai-dev-api` connection tablolarına tek seferlik veri taşıma migration/command'ı yazmalısın. Internal migration'lar dedicated connection üzerinde tablo zaten varsa create etmeyi atlayacak şekilde idempotent tasarlandı.
 
 ## Laravel AI config
 
@@ -64,7 +75,7 @@ Paket config varsayılanları `config/ai-dev-api.php` içindedir:
 
 ## Provider key yönetimi
 
-Komutlar Laravel Prompts kullanır; interaktif olarak provider, label ve API key alır.
+Komutlar Laravel Prompts kullanır; interaktif olarak provider, label ve API key alır. `provider:add` ekleme sonrası desteklenen free modelleri provider+label bazında cacheler ve model ID/display name üzerinden arama yaparak varsayılan modeli seçtirir. Raw API key hiçbir CLI çıktısında gösterilmez.
 
 ```bash
 php artisan ai-dev-api:provider:add
@@ -126,7 +137,7 @@ Custom provider model refresh'i `/models` endpointini dener, free görünen `:fr
 
 ## Model cache
 
-Bir provider key eklendiğinde veya `provider:models` komutuyla refresh edildiğinde provider'ın desteklediği free modeller cachelenir.
+Bir provider key eklendiğinde veya `provider:models` komutuyla refresh edildiğinde provider'ın desteklediği free modeller cachelenir. `provider:models` cached modelleri listeler, istenirse live refresh yapar ve arama destekli seçimle varsayılan modeli DB setting olarak günceller; config default'u `auto` olarak kalır.
 
 ```bash
 php artisan ai-dev-api:provider:models
@@ -242,7 +253,9 @@ Config:
 
 ```php
 'database' => [
+    'connection' => 'ai-dev-api',
     'sqlite' => [
+        'database' => database_path('ai-dev-api.sqlite'),
         'optimize' => true,
         'journal_mode' => 'WAL',
         'synchronous' => 'NORMAL',

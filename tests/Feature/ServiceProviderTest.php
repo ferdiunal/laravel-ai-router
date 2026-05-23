@@ -25,20 +25,17 @@ it('registers the ai-dev-api driver with Laravel AI manager', function () {
     expect($provider->name())->toBe('ai-dev-api');
 });
 
-it('publishes config and migrations only through the service provider', function () {
-    $provider = new AiDevApiServiceProvider(app());
+it('publishes config only and keeps package migrations internal', function () {
+    expect(AiDevApiServiceProvider::pathsToPublish(AiDevApiServiceProvider::class, 'ai-dev-api-config'))
+        ->not->toBeEmpty();
 
-    expect($provider)->toBeInstanceOf(AiDevApiServiceProvider::class);
+    expect(AiDevApiServiceProvider::pathsToPublish(AiDevApiServiceProvider::class, 'ai-dev-api-migrations'))
+        ->toBe([]);
 });
 
-it('publishes migration stubs as runnable php migration files', function () {
-    $paths = AiDevApiServiceProvider::pathsToPublish(AiDevApiServiceProvider::class, 'ai-dev-api-migrations');
-
-    expect($paths)->not->toBeEmpty();
-
-    foreach ($paths as $source => $target) {
-        expect($source)->toEndWith('.php.stub');
-        expect($target)->toEndWith('.php');
-        expect($target)->not->toEndWith('.stub');
-    }
+it('registers a dedicated ai-dev-api sqlite connection by default', function () {
+    expect(config('ai-dev-api.database.connection'))->toBe('ai-dev-api');
+    expect(config('ai-dev-api.database.sqlite.database'))->toEndWith('database/ai-dev-api.sqlite');
+    expect(config('database.connections.ai-dev-api.driver'))->toBe('sqlite');
+    expect(config('database.connections.ai-dev-api.foreign_key_constraints'))->toBeTrue();
 });

@@ -10,6 +10,7 @@ use Laravel\Ai\AiManager;
 it('merges package config and registers no routes', function () {
     expect(config('laravel-ai-router.driver'))->toBe('laravel-ai-router');
     expect(config('laravel-ai-router.routing.max_attempts'))->toBe(20);
+    expect(config('laravel-ai-router.routing.sticky_ttl_minutes'))->toBeNull();
     expect(count(Route::getRoutes()->getRoutes()))->toBe(0);
 });
 

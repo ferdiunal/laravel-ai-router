@@ -15,7 +15,6 @@ return [
     'routing' => [
         'max_attempts' => env('LARAVEL_AI_ROUTER_MAX_ATTEMPTS', 20),
         'cooldown_seconds' => env('LARAVEL_AI_ROUTER_COOLDOWN_SECONDS', 120),
-        'sticky_ttl_minutes' => env('LARAVEL_AI_ROUTER_STICKY_TTL_MINUTES', 30),
         'penalty_per_retryable_failure' => env('LARAVEL_AI_ROUTER_PENALTY_PER_FAILURE', 3),
         'max_penalty' => env('LARAVEL_AI_ROUTER_MAX_PENALTY', 10),
     ],

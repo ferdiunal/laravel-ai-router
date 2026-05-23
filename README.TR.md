@@ -6,6 +6,32 @@ Laravel AI Router, Laravel AI SDK için geliştirilmiş bir text provider paketi
 
 Paket kendi operasyonel durumunu varsayılan olarak ayrılmış bir paket database connection içinde saklar. Varsayılan storage hedefi `database/laravel-ai-router.sqlite` dosyasıdır. Böylece provider key kayıtları, model cache satırları, fallback routing satırları, rate-limit sayaçları, kullanım kayıtları, runtime custom provider tanımları ve package setting kayıtları host uygulamanın ana tablolarından ayrılır.
 
+## Bu paket nedir / ne değildir
+
+Laravel AI Router, Laravel AI SDK için bir text-provider router paketidir. Standalone OpenAI-compatible HTTP proxy değildir ve `/v1/chat/completions` veya `/v1/models` route'ları expose etmez. Host uygulamalar paketi Laravel AI üzerinden çağırır (`ai()->using('laravel-ai-router', 'auto')`), paket de bu çağrıları configured provider key kayıtlarına route eder.
+
+Bu release içindeki built-in routable provider listesi, implement edilmiş ve testle kapsanmış adapterlarla sınırlıdır:
+
+| Provider | Adapter |
+| --- | --- |
+| Cohere | OpenAI-compatible compatibility API |
+| Groq | OpenAI-compatible |
+| Cerebras | OpenAI-compatible |
+| SambaNova | OpenAI-compatible |
+| NVIDIA NIM | OpenAI-compatible, varsayılan seed'de disabled |
+| Mistral | OpenAI-compatible |
+| OpenRouter | OpenAI-compatible |
+| GitHub Models | OpenAI-compatible |
+| Zhipu AI | OpenAI-compatible |
+| Ollama Cloud | OpenAI-compatible |
+| Kilo Gateway | OpenAI-compatible, anonymous placeholder key destekli |
+| Pollinations | OpenAI-compatible, anonymous placeholder key destekli |
+| LLM7 | OpenAI-compatible, anonymous placeholder key destekli |
+
+Google Gemini ve Cloudflare Workers AI native adapterları, provider-specific adapter implement edilene kadar built-in routable provider olarak advertise edilmez.
+
+Free-tier ve anonymous provider'lar limit, model availability, authentication davranışı veya kullanım şartlarını haber vermeden değiştirebilir. Her upstream provider'ın terms, quota ve SLA duruşunu production use case'in için ayrıca doğrulamadıysan free-tier routing'i development/prototype infrastructure olarak ele al.
+
 ## Özellikler
 
 - Laravel AI driver adı: `laravel-ai-router`.
@@ -20,7 +46,7 @@ Paket kendi operasyonel durumunu varsayılan olarak ayrılmış bir paket databa
 - Laravel AI stream eventleri üzerinden streaming text generation.
 - Laravel AI structured response tipleriyle structured output desteği.
 - Non-stream OpenAI-compatible function tool-call loop desteği.
-- Retryable provider hataları için Laravel AI failover exception mapping.
+- Uygun provider key kayıtları arasında bounded internal retry/failover ve retryable provider hataları için Laravel AI failover exception mapping.
 - Provider, label, model, status, token sayıları, latency ve error category bazlı yerel usage analytics.
 - WAL, foreign keys, busy timeout, synchronous mode, temp store ve cache-size kontrollü bounded SQLite optimizasyonu.
 - Laravel Prompts tabanlı interaktif Artisan komutları.
@@ -270,7 +296,7 @@ Retryable rate-limit, geçici overload, timeout ve insufficient-credit durumlar�
 | Structured output | Desteklenir | JSON-mode benzeri seçenekleri gönderir ve geçerli JSON içeriğini Laravel AI structured response tiplerine map eder. |
 | Function tools | Non-stream desteklenir | OpenAI-compatible `tools` / `tool_calls` loop'unu çalıştırır ve tool result mesajlarını provider'a geri gönderir. |
 | Streaming tools | Desteklenmez | Upstream stream açılmadan açık bir `LogicException` ile fail eder. |
-| Failover | Desteklenir | Rate limit, insufficient credit/quota, timeout ve overload hatalarını Laravel AI failover exception tiplerine map eder. |
+| Failover | Desteklenir | Uygun internal provider key kayıtlarını `routing.max_attempts` sınırına kadar dener; ardından rate limit, insufficient credit/quota, timeout ve overload hatalarını Laravel AI failover exception tiplerine map eder. |
 | Images, audio, transcription, embeddings, reranking, files, stores | Desteklenmez | Paket yalnızca text provider contract advertise eder ve unsupported methodlar için açık capability hatası fırlatır. |
 
 ## Usage Analytics

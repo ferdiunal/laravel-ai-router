@@ -6,6 +6,32 @@ Laravel AI Router is a Laravel AI SDK text provider that routes prompts through 
 
 The package stores its own operational state in a dedicated package database connection by default. The default storage target is `database/laravel-ai-router.sqlite`, which keeps provider keys, model cache rows, fallback routing rows, rate-limit counters, usage records, runtime custom provider definitions, and package settings out of the host application's main tables.
 
+## What this is / what this is not
+
+Laravel AI Router is a Laravel AI SDK text-provider router. It is not a standalone OpenAI-compatible HTTP proxy and it does not expose `/v1/chat/completions` or `/v1/models` routes. Host applications call it through Laravel AI (`ai()->using('laravel-ai-router', 'auto')`), and the package routes those calls to configured provider keys.
+
+Built-in routable providers in this release are limited to adapters that are implemented and covered by tests:
+
+| Provider | Adapter |
+| --- | --- |
+| Cohere | OpenAI-compatible compatibility API |
+| Groq | OpenAI-compatible |
+| Cerebras | OpenAI-compatible |
+| SambaNova | OpenAI-compatible |
+| NVIDIA NIM | OpenAI-compatible, seeded disabled by default |
+| Mistral | OpenAI-compatible |
+| OpenRouter | OpenAI-compatible |
+| GitHub Models | OpenAI-compatible |
+| Zhipu AI | OpenAI-compatible |
+| Ollama Cloud | OpenAI-compatible |
+| Kilo Gateway | OpenAI-compatible, anonymous placeholder key supported |
+| Pollinations | OpenAI-compatible, anonymous placeholder key supported |
+| LLM7 | OpenAI-compatible, anonymous placeholder key supported |
+
+Google Gemini and Cloudflare Workers AI native adapters are intentionally not advertised as built-in routable providers until provider-specific adapters are implemented.
+
+Free-tier and anonymous providers can change limits, model availability, authentication behavior, or terms of service without notice. Treat free-tier routing as development/prototype infrastructure unless you have reviewed each upstream provider's terms, quota, and SLA posture for your production use case.
+
 ## Features
 
 - Laravel AI driver name: `laravel-ai-router`.
@@ -20,7 +46,7 @@ The package stores its own operational state in a dedicated package database con
 - Streaming text generation through Laravel AI stream events.
 - Structured output support through Laravel AI structured response types.
 - Non-stream OpenAI-compatible function tool-call loop.
-- Laravel AI failover exception mapping for retryable provider errors.
+- Internal bounded retry/failover across eligible provider keys plus Laravel AI failover exception mapping for retryable provider errors.
 - Local request/usage analytics by provider, label, model, status, token counts, latency, and error category.
 - Bounded SQLite optimization with WAL, foreign keys, busy timeout, synchronous mode, temp store, and cache-size controls.
 - Interactive Artisan commands implemented with Laravel Prompts.
@@ -270,7 +296,7 @@ Retryable rate-limit, temporary overload, timeout, and insufficient-credit condi
 | Structured output | Supported | Sends JSON-mode style options and maps valid JSON content into Laravel AI structured response types. |
 | Function tools | Supported for non-streaming | Executes OpenAI-compatible `tools` / `tool_calls` loops and sends tool result messages back to the provider. |
 | Streaming tools | Not supported | Fails before opening the upstream stream with a clear `LogicException`. |
-| Failover | Supported | Maps rate limits, insufficient credit/quota, timeout, and overload errors to Laravel AI failover exception types. |
+| Failover | Supported | Retries eligible internal provider keys up to `routing.max_attempts`, then maps rate limits, insufficient credit/quota, timeout, and overload errors to Laravel AI failover exception types. |
 | Images, audio, transcription, embeddings, reranking, files, stores | Not supported | The package advertises only the text provider contract and throws explicit capability errors for unsupported methods. |
 
 ## Usage Analytics

@@ -2,6 +2,23 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.1.1 - 2026-05-23
+
+### Fixed
+
+- Stabilized the CI matrix across Ubuntu and Windows for PHP 8.4.
+- Raised the Laravel Pint development dependency floor so `prefer-lowest` uses the project's canonical formatting rules.
+- Made the Pest architecture assertion compatible with the lowest supported dependency set.
+- Forced repository text files to LF checkout behavior for Windows formatter portability.
+- Serialized PHPStan/Larastan analysis to avoid Orchestra Testbench bootstrap cache races on Windows.
+- Normalized SQLite path assertions in tests so Windows path separators do not fail the suite.
+- Avoided configuring Composer with a repo-scoped GitHub Actions token for public package downloads, while still supporting an optional `COMPOSER_GITHUB_TOKEN` secret.
+
+### Validation
+
+- Local `composer ci`
+- GitHub Actions Tests matrix on `main`: Ubuntu/Windows x prefer-stable/prefer-lowest passed
+
 ## v0.1.0 - 2026-05-23
 
 ### Highlights

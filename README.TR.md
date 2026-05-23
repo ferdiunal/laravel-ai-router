@@ -1,8 +1,10 @@
+![Laravel Ai Router](./art/cover.png)
+
 # Laravel AI Router
 
 Türkçe | [English](README.md)
 
-Laravel AI Router, Laravel AI SDK için geliştirilmiş bir text provider paketidir. Paket, tek bir Laravel AI provider adı (`laravel-ai-router`) üzerinden birden fazla OpenAI-compatible provider anahtarını, provider + label bazlı free model cache kayıtlarını, fallback model sıralamasını, yerel rate-limit pencerelerini ve usage analytics verisini yönetir.
+Laravel AI Router, Laravel AI SDK için geliştirilmiş bir text provider paketidir. Paket, tek bir Laravel AI provider adı (`laravel-ai-router`) üzerinden birden fazla OpenAI-compatible provider anahtarını, provider + label bazlı available-model cache kayıtlarını, fallback model sıralamasını, yerel rate-limit pencerelerini ve usage analytics verisini yönetir.
 
 Paket kendi operasyonel durumunu varsayılan olarak ayrılmış bir paket database connection içinde saklar. Varsayılan storage hedefi `database/laravel-ai-router.sqlite` dosyasıdır. Böylece provider key kayıtları, model cache satırları, fallback routing satırları, rate-limit sayaçları, kullanım kayıtları, runtime custom provider tanımları ve package setting kayıtları host uygulamanın ana tablolarından ayrılır.
 
@@ -40,7 +42,7 @@ Free-tier ve anonymous provider'lar limit, model availability, authentication da
 - Runtime custom OpenAI-compatible provider yönetimi: ekle, listele, aktif et, pasif et, sil.
 - Laravel encryption ile encrypted API-key saklama.
 - Maskelenmiş CLI çıktısı; raw provider key değerleri yazdırılmaz.
-- Provider + label scope'lu free model cache.
+- Provider + label scope'lu, free/credits metadata içeren available-model cache.
 - `LaravelAiRouterProvider::models()` ile cached model ID erişimi.
 - Laravel AI `TextProvider` üzerinden non-streaming text generation.
 - Laravel AI stream eventleri üzerinden streaming text generation.
@@ -147,7 +149,7 @@ php artisan laravel-ai-router:provider:remove
 2. API key.
 3. Provider-key label.
 4. Opsiyonel model-cache refresh.
-5. Cached free modeller içinden opsiyonel default model seçimi.
+5. Cached available modeller içinden opsiyonel default model seçimi.
 
 Raw API key persistence öncesi encrypt edilir ve command output içinde hiçbir zaman gösterilmez. Listeleme ve prompt ekranlarında sadece masked credential kullanılır.
 
@@ -203,7 +205,7 @@ Static custom provider tanımı config üzerinden de yapılabilir:
 ],
 ```
 
-Custom provider `/models` endpointinden free model ID döndürürse Laravel AI Router bu model ID'leri provider + label bazında cacheleyebilir ve routing içinde kullanılabilmeleri için runtime model/fallback satırlarını oluşturabilir.
+Routable OpenAI-compatible provider `/models` endpointinden model ID döndürürse Laravel AI Router bu model ID'leri provider + label bazında cacheleyebilir ve exact model routing içinde kullanılabilmeleri için runtime model/fallback satırlarını oluşturabilir.
 
 ## Model Cache ve Default Model Tercihi
 
@@ -215,14 +217,16 @@ Cache refresh ve listeleme için:
 php artisan laravel-ai-router:provider:models
 ```
 
-Bu komut seçilen key için cache refresh yapabilir, cached free modelleri listeleyebilir ve searchable prompt ile default model seçtirebilir. Model listeleme ve default seçim akışı yalnızca şu kriterleri sağlayan kayıtları gösterir:
+Bu komut seçilen key için cache refresh yapabilir, cached available modelleri listeleyebilir ve searchable prompt ile default model seçtirebilir. Model listeleme ve default seçim akışı yalnızca şu kriterleri sağlayan kayıtları gösterir:
 
 - Provider platform için routable adapter vardır.
 - Provider key enabled durumdadır.
 - Provider key status değeri `invalid` değildir.
 - Provider key model cache süresi dolmamıştır.
 - Cache row provider key ID, platform ve label ile eşleşir.
-- Cache row enabled durumdadır ve free olarak işaretlenmiştir.
+- Cache row enabled durumdadır.
+
+Live model discovery routable OpenAI-compatible provider'lar için geneldir: `/models` içinden gelen geçerli satırlar ID değeri `:free` ile bitmese bile cachelenir. Free-tier bilgisi metadata olarak saklanır (`is_free`); non-free live satırlar varsayılan olarak `credits-based` budget label alır, exact model ID ile route edilebilir ve `auto` beklenmedik kredi tüketmesin diye auto-fallback satırı varsayılan olarak disabled kalır.
 
 Package config default değeri `auto` olarak kalır. Kullanıcı CLI üzerinden default model seçtiğinde seçim package settings tablosuna yazılır ve runtime sırasında `LaravelAiRouterProvider::defaultTextModel()` tarafından okunur. Bu işlem config dosyalarını değiştirmez.
 
@@ -237,12 +241,12 @@ $provider = app(AiManager::class)->textProvider('laravel-ai-router');
 assert($provider instanceof LaravelAiRouterProvider);
 
 $modelIds = $provider->models('openrouter', 'Primary');
-// ['auto', 'qwen/qwen3-coder:free', ...]
+// ['auto', 'paid/model', 'qwen/qwen3-coder:free', ...]
 ```
 
 ## Prompt Kullanımı
 
-`auto` model değeri, request'in uygun provider key ve cached free modele route edilmesini sağlar:
+`auto` model değeri, request'in uygun provider key ve fallback-enabled cached modele route edilmesini sağlar:
 
 ```php
 $response = ai()
@@ -250,6 +254,8 @@ $response = ai()
     ->prompt('Bu destek kaydını üç maddeyle özetle.')
     ->asText();
 ```
+
+`LaravelAiRouterProvider::models()` tarafından dönen exact model ID'ler, auto-fallback satırı disabled olsa bile doğrudan route edilebilir. Credits-based live modeller için varsayılan davranış budur.
 
 Agent attribute kullanımı:
 

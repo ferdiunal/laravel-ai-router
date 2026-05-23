@@ -1,8 +1,10 @@
+![Laravel Ai Router](./art/cover.png)
+
 # Laravel AI Router
 
 English | [Türkçe](README.TR.md)
 
-Laravel AI Router is a Laravel AI SDK text provider that routes prompts through locally managed provider keys, free-model caches, fallback metadata, rate-limit windows, and usage analytics. It is designed for applications that want one Laravel AI provider name (`laravel-ai-router`) while using multiple OpenAI-compatible providers and multiple labeled API keys behind a local routing layer.
+Laravel AI Router is a Laravel AI SDK text provider that routes prompts through locally managed provider keys, available-model caches, fallback metadata, rate-limit windows, and usage analytics. It is designed for applications that want one Laravel AI provider name (`laravel-ai-router`) while using multiple OpenAI-compatible providers and multiple labeled API keys behind a local routing layer.
 
 The package stores its own operational state in a dedicated package database connection by default. The default storage target is `database/laravel-ai-router.sqlite`, which keeps provider keys, model cache rows, fallback routing rows, rate-limit counters, usage records, runtime custom provider definitions, and package settings out of the host application's main tables.
 
@@ -40,7 +42,7 @@ Free-tier and anonymous providers can change limits, model availability, authent
 - Runtime custom OpenAI-compatible provider definitions: add, list, enable, disable, remove.
 - Encrypted API-key storage through Laravel encryption.
 - Masked CLI output; raw provider keys are not printed.
-- Provider + label scoped free-model cache.
+- Provider + label scoped available-model cache with free/credits metadata.
 - `LaravelAiRouterProvider::models()` access to cached model IDs.
 - Non-streaming text generation through Laravel AI `TextProvider`.
 - Streaming text generation through Laravel AI stream events.
@@ -147,7 +149,7 @@ php artisan laravel-ai-router:provider:remove
 2. API key.
 3. Provider-key label.
 4. Optional model-cache refresh.
-5. Optional default model selection from cached free models.
+5. Optional default model selection from cached available models.
 
 The raw API key is encrypted before persistence and is never rendered in command output. Lists and prompts show masked credentials only.
 
@@ -203,7 +205,7 @@ You can also define static custom providers in config:
 ],
 ```
 
-When a custom provider returns free model IDs from its `/models` endpoint, Laravel AI Router can cache those model IDs by provider + label and create runtime model/fallback rows so they can participate in routing.
+When a routable OpenAI-compatible provider returns model IDs from its `/models` endpoint, Laravel AI Router can cache those model IDs by provider + label and create runtime model/fallback rows so they can participate in exact model routing.
 
 ## Model Cache and Default Model Preference
 
@@ -215,14 +217,16 @@ Refresh and inspect the cache with:
 php artisan laravel-ai-router:provider:models
 ```
 
-The command can refresh the selected key's cache, list cached free models, and select a default model through a searchable prompt. Model listing and default selection expose only rows that match all of these constraints:
+The command can refresh the selected key's cache, list cached available models, and select a default model through a searchable prompt. Model listing and default selection expose only rows that match all of these constraints:
 
 - The provider platform has a routable adapter.
 - The provider key is enabled.
 - The provider key status is not `invalid`.
 - The provider key model cache has not expired.
 - The cache row matches the provider key ID, platform, and label.
-- The cache row is enabled and marked free.
+- The cache row is enabled.
+
+Live model discovery is provider-agnostic for routable OpenAI-compatible providers: valid `/models` rows are cached even when their IDs do not end in `:free`. Free-tier status is stored as metadata (`is_free`); non-free live rows default to the `credits-based` budget label, are routeable by exact model ID, and keep their auto-fallback row disabled by default so `auto` does not unexpectedly spend credits.
 
 The package config default remains `auto`. When the user selects a default model through the CLI, the selection is persisted in the package settings table and read at runtime by `LaravelAiRouterProvider::defaultTextModel()`. This does not mutate config files.
 
@@ -237,12 +241,12 @@ $provider = app(AiManager::class)->textProvider('laravel-ai-router');
 assert($provider instanceof LaravelAiRouterProvider);
 
 $modelIds = $provider->models('openrouter', 'Primary');
-// ['auto', 'qwen/qwen3-coder:free', ...]
+// ['auto', 'paid/model', 'qwen/qwen3-coder:free', ...]
 ```
 
 ## Prompt Usage
 
-Use `auto` to let Laravel AI Router route the request to an eligible provider key and cached free model:
+Use `auto` to let Laravel AI Router route the request to an eligible provider key and fallback-enabled cached model:
 
 ```php
 $response = ai()
@@ -250,6 +254,8 @@ $response = ai()
     ->prompt('Summarize this ticket in three bullet points.')
     ->asText();
 ```
+
+Exact model IDs returned by `LaravelAiRouterProvider::models()` can be routed directly even when their auto-fallback row is disabled, which is the default for credits-based live models.
 
 Agent attribute usage:
 

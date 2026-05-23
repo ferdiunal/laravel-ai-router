@@ -324,6 +324,20 @@ Tutulan alanlar:
 
 Usage satırları package-owned storage içinde tutulur. Bu veriler provider reliability, model dağılımı, latency, token volume ve error trendlerini incelemek için kullanılabilir.
 
+### Retention ve pruning
+
+Laravel AI Router varsayılan olarak usage satırlarını `LARAVEL_AI_ROUTER_USAGE_RETENTION_DAYS` gün, rate-window/cooldown satırlarını `LARAVEL_AI_ROUTER_RATE_WINDOW_RETENTION_DAYS` gün tutar. Eski package storage satırlarını temizlemek için:
+
+```bash
+php artisan laravel-ai-router:prune
+```
+
+SQLite package database'i pruning sonrası özellikle compact etmek istiyorsan `--vacuum` opsiyonunu bilinçli olarak kullan:
+
+```bash
+php artisan laravel-ai-router:prune --vacuum
+```
+
 ## SQLite Optimizasyonu ve Package Storage
 
 Package connection SQLite kullandığında ve optimization açık olduğunda paket bounded PRAGMA ayarlarını uygular:

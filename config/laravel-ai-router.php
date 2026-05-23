@@ -24,6 +24,14 @@ return [
         'max_event_bytes' => env('LARAVEL_AI_ROUTER_STREAM_MAX_EVENT_BYTES', 1_048_576),
     ],
 
+    'usage' => [
+        'retention_days' => env('LARAVEL_AI_ROUTER_USAGE_RETENTION_DAYS', 30),
+    ],
+
+    'rate_windows' => [
+        'retention_days' => env('LARAVEL_AI_ROUTER_RATE_WINDOW_RETENTION_DAYS', 7),
+    ],
+
     'database' => [
         'connection' => env('LARAVEL_AI_ROUTER_DB_CONNECTION', 'laravel-ai-router'),
         'sqlite' => [

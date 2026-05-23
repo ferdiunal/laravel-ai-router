@@ -324,6 +324,20 @@ Tracked fields include:
 
 Usage rows are stored in package-owned storage and can be used to inspect provider reliability, model distribution, latency, token volume, and error trends.
 
+### Retention and pruning
+
+Laravel AI Router keeps usage rows for `LARAVEL_AI_ROUTER_USAGE_RETENTION_DAYS` days by default and rate-window/cooldown rows for `LARAVEL_AI_ROUTER_RATE_WINDOW_RETENTION_DAYS` days by default. Prune old package storage rows with:
+
+```bash
+php artisan laravel-ai-router:prune
+```
+
+Use `--vacuum` only when you explicitly want SQLite to compact the package database after pruning:
+
+```bash
+php artisan laravel-ai-router:prune --vacuum
+```
+
 ## SQLite Optimization and Package Storage
 
 When the package connection uses SQLite and optimization is enabled, the package applies bounded PRAGMA settings:

@@ -16,6 +16,7 @@ use Ferdiunal\LaravelAiRouter\Console\Commands\ProviderEnableCommand;
 use Ferdiunal\LaravelAiRouter\Console\Commands\ProviderListCommand;
 use Ferdiunal\LaravelAiRouter\Console\Commands\ProviderModelsCommand;
 use Ferdiunal\LaravelAiRouter\Console\Commands\ProviderRemoveCommand;
+use Ferdiunal\LaravelAiRouter\Console\Commands\PruneCommand;
 use Ferdiunal\LaravelAiRouter\Console\Commands\UsageCommand;
 use Ferdiunal\LaravelAiRouter\Gateway\LaravelAiRouterTextGateway;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -68,6 +69,7 @@ final class LaravelAiRouterServiceProvider extends ServiceProvider
                 ProviderListCommand::class,
                 ProviderModelsCommand::class,
                 ProviderRemoveCommand::class,
+                PruneCommand::class,
                 UsageCommand::class,
             ]);
 

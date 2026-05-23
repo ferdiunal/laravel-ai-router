@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ferdiunal\AiDevApi\Console\Concerns;
 
 use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
+use Ferdiunal\AiDevApi\Models\AiDevApiProviderDefinition;
 use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
 
 use function Laravel\Prompts\confirm;
@@ -65,6 +66,30 @@ trait InteractsWithProviderPrompts
         );
 
         return $keys->firstWhere('id', (int) $selected);
+    }
+
+    protected function definitionPrompt(string $label = 'Custom provider definition'): ?AiDevApiProviderDefinition
+    {
+        $definitions = AiDevApiProviderDefinition::query()->orderBy('platform')->get();
+
+        if ($definitions->isEmpty()) {
+            return null;
+        }
+
+        if (! $this->shouldPrompt()) {
+            return $definitions->first();
+        }
+
+        $selected = search(
+            label: $label,
+            options: fn (string $value): array => $definitions
+                ->filter(fn (AiDevApiProviderDefinition $definition): bool => str_contains(strtolower($definition->platform.' '.$definition->name), strtolower($value)))
+                ->mapWithKeys(fn (AiDevApiProviderDefinition $definition): array => [(int) $definition->getKey() => "{$definition->platform} / {$definition->name} / {$definition->base_url}"])
+                ->all(),
+            placeholder: 'Search provider slug or name',
+        );
+
+        return $definitions->firstWhere('id', (int) $selected);
     }
 
     private function shouldPrompt(): bool

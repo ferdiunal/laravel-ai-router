@@ -6,7 +6,9 @@ namespace Ferdiunal\AiDevApi\Services;
 
 use Ferdiunal\AiDevApi\Adapters\ProviderAdapterRegistry;
 use Ferdiunal\AiDevApi\Catalog\ModelCatalog;
+use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
 use Ferdiunal\AiDevApi\Exceptions\ProviderAuthenticationException;
+use Ferdiunal\AiDevApi\Models\AiDevApiFallback;
 use Ferdiunal\AiDevApi\Models\AiDevApiModel;
 use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
 use Ferdiunal\AiDevApi\Models\AiDevApiProviderModelCache;
@@ -43,6 +45,8 @@ final class ProviderModelCacheService
             $models = $this->curatedModels((string) $key->platform);
             $source = 'curated';
         }
+
+        $this->ensureRoutableCustomModels((string) $key->platform, $models, $source);
 
         $this->disableCacheRows($key);
 
@@ -88,9 +92,12 @@ final class ProviderModelCacheService
         $ids = [];
 
         try {
+            $routablePlatforms = $this->routablePlatforms();
+
             $query = AiDevApiProviderModelCache::query()
                 ->where('enabled', true)
                 ->where('is_free', true)
+                ->whereIn('platform', $routablePlatforms)
                 ->whereHas('providerKey', function ($query): void {
                     $query->where('enabled', true)
                         ->where('status', '!=', 'invalid')
@@ -114,7 +121,10 @@ final class ProviderModelCacheService
         }
 
         if ($ids === [] && $label === null) {
+            $routablePlatforms = $routablePlatforms ?? $this->routablePlatforms();
+
             $ids = collect(ModelCatalog::all())
+                ->whereIn('platform', $routablePlatforms)
                 ->when($provider !== null, fn ($models) => $models->where('platform', $provider))
                 ->where('enabled', true)
                 ->pluck('model_id')
@@ -130,6 +140,7 @@ final class ProviderModelCacheService
     {
         return AiDevApiModel::query()
             ->where('enabled', true)
+            ->whereIn('platform', $this->routablePlatforms())
             ->orderBy('intelligence_rank')
             ->orderBy('id')
             ->value('model_id');
@@ -181,6 +192,62 @@ final class ProviderModelCacheService
             ->all();
     }
 
+    /**
+     * @param  array<int, array<string, mixed>>  $models
+     */
+    private function ensureRoutableCustomModels(string $platform, array $models, string $source): void
+    {
+        if ($source !== 'live' || $models === []) {
+            return;
+        }
+
+        try {
+            $definition = ProviderCatalog::get($platform);
+        } catch (\InvalidArgumentException) {
+            return;
+        }
+
+        if (($definition['custom'] ?? false) !== true) {
+            return;
+        }
+
+        $nextPriority = ((int) AiDevApiFallback::query()->max('priority')) + 1;
+
+        foreach ($models as $model) {
+            $row = AiDevApiModel::query()->updateOrCreate(
+                [
+                    'platform' => $platform,
+                    'model_id' => $model['model_id'],
+                ],
+                [
+                    'display_name' => $model['display_name'] ?? $model['model_id'],
+                    'intelligence_rank' => $model['intelligence_rank'] ?? 1000,
+                    'speed_rank' => $model['speed_rank'] ?? 1000,
+                    'rpm_limit' => $model['rpm_limit'] ?? null,
+                    'rpd_limit' => $model['rpd_limit'] ?? null,
+                    'tpm_limit' => $model['tpm_limit'] ?? null,
+                    'tpd_limit' => $model['tpd_limit'] ?? null,
+                    'budget_label' => $model['budget_label'] ?? 'custom',
+                    'context_window' => $model['context_window'] ?? null,
+                    'enabled' => true,
+                ],
+            );
+
+            $fallback = AiDevApiFallback::query()->firstOrNew([
+                'ai_dev_api_model_id' => $row->getKey(),
+            ]);
+
+            if (! $fallback->exists) {
+                $fallback->priority = $nextPriority++;
+            }
+
+            $fallback->forceFill([
+                'enabled' => true,
+                'penalty' => 0,
+            ])->save();
+        }
+    }
+
     /** @return array<int, array<string, mixed>> */
     private function curatedModels(string $platform): array
     {
@@ -213,5 +280,15 @@ final class ProviderModelCacheService
         AiDevApiProviderModelCache::query()
             ->where('provider_key_id', $key->getKey())
             ->update(['enabled' => false]);
+    }
+
+    /** @return array<int, string> */
+    private function routablePlatforms(): array
+    {
+        return collect(ProviderCatalog::all())
+            ->keys()
+            ->filter(fn (string $platform): bool => $this->adapters->has($platform))
+            ->values()
+            ->all();
     }
 }

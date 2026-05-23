@@ -6,6 +6,11 @@ namespace Ferdiunal\AiDevApi;
 
 use Ferdiunal\AiDevApi\Console\Commands\InstallCommand;
 use Ferdiunal\AiDevApi\Console\Commands\ProviderAddCommand;
+use Ferdiunal\AiDevApi\Console\Commands\ProviderDefinitionAddCommand;
+use Ferdiunal\AiDevApi\Console\Commands\ProviderDefinitionDisableCommand;
+use Ferdiunal\AiDevApi\Console\Commands\ProviderDefinitionEnableCommand;
+use Ferdiunal\AiDevApi\Console\Commands\ProviderDefinitionListCommand;
+use Ferdiunal\AiDevApi\Console\Commands\ProviderDefinitionRemoveCommand;
 use Ferdiunal\AiDevApi\Console\Commands\ProviderDisableCommand;
 use Ferdiunal\AiDevApi\Console\Commands\ProviderEnableCommand;
 use Ferdiunal\AiDevApi\Console\Commands\ProviderListCommand;
@@ -42,6 +47,11 @@ final class AiDevApiServiceProvider extends ServiceProvider
             $this->commands([
                 InstallCommand::class,
                 ProviderAddCommand::class,
+                ProviderDefinitionAddCommand::class,
+                ProviderDefinitionDisableCommand::class,
+                ProviderDefinitionEnableCommand::class,
+                ProviderDefinitionListCommand::class,
+                ProviderDefinitionRemoveCommand::class,
                 ProviderDisableCommand::class,
                 ProviderEnableCommand::class,
                 ProviderListCommand::class,

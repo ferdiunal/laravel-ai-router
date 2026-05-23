@@ -50,6 +50,65 @@ it('sends openai compatible chat completion requests with provider options', fun
     });
 });
 
+it('does not let extra headers override the provider bearer token', function () {
+    Http::fake([
+        'https://api.example.com/v1/chat/completions' => Http::response([
+            'id' => 'chatcmpl_auth_header',
+            'object' => 'chat.completion',
+            'created' => 1,
+            'model' => 'model-a',
+            'choices' => [[
+                'index' => 0,
+                'message' => ['role' => 'assistant', 'content' => 'hello'],
+                'finish_reason' => 'stop',
+            ]],
+        ]),
+    ]);
+
+    $adapter = new OpenAiCompatibleAdapter(
+        platform: 'example',
+        name: 'Example',
+        baseUrl: 'https://api.example.com/v1',
+        extraHeaders: ['authorization' => 'Bearer injected-key', 'X-Api-Key' => 'injected-api-key', 'X-Test' => 'yes'],
+    );
+
+    $adapter->complete('provider-key', [['role' => 'user', 'content' => 'Hi']], 'model-a');
+
+    Http::assertSent(function (Request $request): bool {
+        return $request->hasHeader('Authorization', 'Bearer provider-key')
+            && ! $request->hasHeader('Authorization', 'Bearer injected-key')
+            && ! $request->hasHeader('X-Api-Key', 'injected-api-key')
+            && $request->hasHeader('X-Test', 'yes');
+    });
+});
+
+it('rejects unsafe custom validation URLs before validating keys', function () {
+    Http::fake();
+
+    $adapter = new OpenAiCompatibleAdapter(
+        platform: 'custom-validation',
+        name: 'Custom Validation',
+        baseUrl: 'https://api.example.com/v1',
+        enforcePublicBaseUrl: true,
+        validateUrl: 'https://localhost./models',
+    );
+
+    $adapter->validateKey('provider-key');
+})->throws(RuntimeException::class, 'validation URL must be a public HTTPS URL');
+
+it('rejects unsafe custom base URLs before dispatching requests', function () {
+    Http::fake();
+
+    $adapter = new OpenAiCompatibleAdapter(
+        platform: 'custom-local',
+        name: 'Custom Local',
+        baseUrl: 'https://localhost./v1',
+        enforcePublicBaseUrl: true,
+    );
+
+    $adapter->models('provider-key');
+})->throws(RuntimeException::class, 'base URL must be a public HTTPS URL');
+
 it('normalizes compatible provider text responses', function () {
     Http::fake([
         'https://api.example.com/v1/chat/completions' => Http::response([

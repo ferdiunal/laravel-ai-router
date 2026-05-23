@@ -6,6 +6,7 @@ namespace Ferdiunal\AiDevApi\Adapters;
 
 use Ferdiunal\AiDevApi\Adapters\Contracts\ProviderAdapter;
 use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
+use Ferdiunal\AiDevApi\Support\ProviderDefinitionValidator;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -31,7 +32,8 @@ final class ProviderAdapterRegistry
                 platform: $platform,
                 name: (string) $definition['name'],
                 baseUrl: (string) $definition['base_url'],
-                extraHeaders: $platform === 'openrouter' ? array_filter(config('ai-dev-api.providers.openrouter.headers', [])) : [],
+                extraHeaders: $this->extraHeaders($platform, $definition),
+                enforcePublicBaseUrl: (bool) ($definition['custom'] ?? false),
                 timeoutMs: (int) ($definition['timeout_ms'] ?? 15_000),
                 maxStreamLineBytes: max(1024, (int) config('ai-dev-api.streaming.max_line_bytes', 65_536)),
                 maxStreamEventBytes: max(1024, (int) config('ai-dev-api.streaming.max_event_bytes', 1_048_576)),
@@ -39,5 +41,18 @@ final class ProviderAdapterRegistry
         }
 
         throw new RuntimeException("Provider adapter [{$platform}] is not implemented yet.");
+    }
+
+    /**
+     * @param  array<string, mixed>  $definition
+     * @return array<string, string>
+     */
+    private function extraHeaders(string $platform, array $definition): array
+    {
+        $headers = $platform === 'openrouter'
+            ? array_filter(config('ai-dev-api.providers.openrouter.headers', []))
+            : ($definition['headers'] ?? []);
+
+        return ProviderDefinitionValidator::sanitizeHeaders(is_array($headers) ? $headers : []);
     }
 }

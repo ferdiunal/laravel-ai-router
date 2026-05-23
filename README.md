@@ -7,6 +7,7 @@ Laravel AI SDK için provider/key/model routing paketi. Amaç: birden fazla ücr
 - Laravel AI driver adı: `ai-dev-api`
 - Varsayılan text model: `auto`
 - Provider API key yönetimi: ekle, sil, listele, aktif/pasif yap
+- Runtime custom OpenAI-compatible provider tanımı: base URL/header/timeout ekle, listele, aktif/pasif yap, sil
 - API key değerleri encrypted saklanır, CLI çıktısında maskelenir
 - Provider + label bazlı free model cache
 - `AiDevApiProvider::models()` ile cachelenmiş model id erişimi
@@ -75,6 +76,53 @@ php artisan ai-dev-api:provider:remove
 ```
 
 Provider key kimliği `provider + label` ile ayrılır. Örneğin aynı `openrouter` provider için `Primary`, `Backup`, `Team` gibi farklı label'lar kullanılabilir.
+
+## Custom OpenAI-compatible provider tanımları
+
+Kod değiştirmeden OpenAI-compatible bir gateway/proxy/provider eklemek için önce runtime provider definition oluştur, sonra normal provider key akışını kullan.
+
+```bash
+php artisan ai-dev-api:provider-definition:add
+php artisan ai-dev-api:provider-definition:list
+php artisan ai-dev-api:provider-definition:enable
+php artisan ai-dev-api:provider-definition:disable
+php artisan ai-dev-api:provider-definition:remove
+
+php artisan ai-dev-api:provider:add
+php artisan ai-dev-api:provider:models
+```
+
+Definition alanları:
+
+- provider slug: örn. `my-openai-proxy`
+- name: ekranda görünen ad
+- OpenAI-compatible base URL: örn. `https://api.example.com/v1`
+- extra headers JSON: örn. `{"X-Title":"AI Dev API"}`
+- timeout ms
+- anonymous placeholder key desteği
+
+Base URL güvenlik gereği public `https://` olmak zorundadır; credential, query/fragment, localhost, private/reserved IP ve local/test/internal hostlar reddedilir. Runtime kayıt sırasında ve custom provider isteklerinden hemen önce host DNS kayıtları public IP'lere resolve olmalı; redirect takip edilmez. Extra headers sadece metadata/proxy header'ları içindir; `Authorization`, `Proxy-Authorization`, `X-Api-Key` veya token/secret/password taşıyan header adları reddedilir. Runtime definition DB'de tutulur; API key ayrıca Laravel `Crypt::encryptString` ile provider key tablosunda encrypted saklanır.
+
+Config üzerinden statik custom provider eklemek de mümkündür:
+
+```php
+// config/ai-dev-api.php
+'providers' => [
+    'custom' => [
+        'my-openai-proxy' => [
+            'name' => 'My OpenAI Proxy',
+            'base_url' => 'https://api.example.com/v1',
+            'headers' => [
+                'X-Title' => 'AI Dev API',
+            ],
+            'timeout_ms' => 30000,
+            'requires_placeholder_key' => false,
+        ],
+    ],
+],
+```
+
+Custom provider model refresh'i `/models` endpointini dener, free görünen `:free` model id'lerini provider+label bazında cacheler ve runtime route edilebilir model/fallback satırlarını oluşturur.
 
 ## Model cache
 

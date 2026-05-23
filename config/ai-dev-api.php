@@ -43,5 +43,18 @@ return [
                 'X-Title' => env('AI_DEV_API_OPENROUTER_TITLE', 'AI Dev API'),
             ],
         ],
+
+        'custom' => [
+            // 'my-openai-proxy' => [
+            //     'name' => 'My OpenAI-compatible Proxy',
+            //     'base_url' => env('AI_DEV_API_MY_PROXY_BASE_URL'),
+            //     'headers' => [
+            //         // Metadata/proxy headers only; auth-bearing headers are rejected.
+            //         'X-Title' => 'AI Dev API',
+            //     ],
+            //     'timeout_ms' => 30000,
+            //     'requires_placeholder_key' => false,
+            // ],
+        ],
     ],
 ];

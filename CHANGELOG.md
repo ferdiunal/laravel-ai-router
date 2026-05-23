@@ -2,6 +2,24 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.1.0 - 2026-05-23
+
+### Highlights
+
+- Laravel AI SDK text provider and driver registration with default `auto` model routing.
+- Provider API-key management with encrypted storage, labels, enable/disable/remove flows, and anonymous placeholder-key support.
+- Runtime custom OpenAI-compatible provider definitions with prompt-based management and SSRF-safe validation.
+- Provider + label scoped free-model cache refresh and `LaravelAiRouterProvider::models()` access.
+- OpenAI-compatible non-streaming/streaming text gateway, structured output mapping, non-stream tool-call loops, and failover exception mapping.
+- Bounded internal retry/failover with local rate windows, cooldowns, fallback penalties, and max-attempt protection.
+- Usage analytics, package-owned SQLite storage, PRAGMA optimization, retention config, and `laravel-ai-router:prune` maintenance command.
+
+### Validation
+
+- `composer ci`
+- Pest: 128 passed / 416 assertions
+- Pint and PHPStan/Larastan level 6 passed
+
 ## 0.1.0 - 2026-05-23
 
 - Added the `laravel-ai-router` Laravel AI SDK text provider and driver registration with default `auto` model routing.

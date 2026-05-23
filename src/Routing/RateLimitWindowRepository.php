@@ -1,0 +1,152 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Ferdiunal\AiDevApi\Routing;
+
+use Carbon\CarbonImmutable;
+use Ferdiunal\AiDevApi\Models\AiDevApiRateWindow;
+use Illuminate\Support\Facades\DB;
+
+final class RateLimitWindowRepository
+{
+    /** @param array{rpm:?int,rpd:?int,tpm:?int,tpd:?int} $limits */
+    public function canMakeRequest(string $platform, string $modelId, int $keyId, array $limits): bool
+    {
+        return $this->underRequestLimit($platform, $modelId, $keyId, 'rpm', $limits['rpm'] ?? null)
+            && $this->underRequestLimit($platform, $modelId, $keyId, 'rpd', $limits['rpd'] ?? null);
+    }
+
+    /** @param array{tpm:?int,tpd:?int} $limits */
+    public function canUseTokens(string $platform, string $modelId, int $keyId, int $estimatedTokens, array $limits): bool
+    {
+        return $this->underTokenLimit($platform, $modelId, $keyId, 'tpm', $estimatedTokens, $limits['tpm'] ?? null)
+            && $this->underTokenLimit($platform, $modelId, $keyId, 'tpd', $estimatedTokens, $limits['tpd'] ?? null);
+    }
+
+    public function recordRequest(string $platform, string $modelId, int $keyId): void
+    {
+        $this->incrementWindow($platform, $modelId, $keyId, 'rpm', 1, 0);
+        $this->incrementWindow($platform, $modelId, $keyId, 'rpd', 1, 0);
+    }
+
+    public function recordTokens(string $platform, string $modelId, int $keyId, int $tokens): void
+    {
+        if ($tokens <= 0) {
+            return;
+        }
+
+        $this->incrementWindow($platform, $modelId, $keyId, 'tpm', 0, $tokens);
+        $this->incrementWindow($platform, $modelId, $keyId, 'tpd', 0, $tokens);
+    }
+
+    public function setCooldown(string $platform, string $modelId, int $keyId, int $seconds): void
+    {
+        AiDevApiRateWindow::query()->create([
+            'platform' => $platform,
+            'model_id' => $modelId,
+            'provider_key_id' => $keyId,
+            'window_type' => 'cooldown',
+            'window_starts_at' => now(),
+            'window_ends_at' => now()->addSeconds($seconds),
+            'cooldown_until' => now()->addSeconds($seconds),
+        ]);
+    }
+
+    public function isOnCooldown(string $platform, string $modelId, int $keyId): bool
+    {
+        return AiDevApiRateWindow::query()
+            ->where('platform', $platform)
+            ->where('model_id', $modelId)
+            ->where('provider_key_id', $keyId)
+            ->where('window_type', 'cooldown')
+            ->where('cooldown_until', '>', now())
+            ->exists();
+    }
+
+    private function underRequestLimit(string $platform, string $modelId, int $keyId, string $type, ?int $limit): bool
+    {
+        if ($limit === null || $limit <= 0) {
+            return true;
+        }
+
+        $window = $this->windowBounds($type);
+
+        $used = (int) AiDevApiRateWindow::query()
+            ->where('platform', $platform)
+            ->where('model_id', $modelId)
+            ->where('provider_key_id', $keyId)
+            ->where('window_type', $type)
+            ->where('window_starts_at', $window['start'])
+            ->value('request_count');
+
+        return $used < $limit;
+    }
+
+    private function underTokenLimit(string $platform, string $modelId, int $keyId, string $type, int $estimatedTokens, ?int $limit): bool
+    {
+        if ($limit === null || $limit <= 0) {
+            return true;
+        }
+
+        $window = $this->windowBounds($type);
+
+        $used = (int) AiDevApiRateWindow::query()
+            ->where('platform', $platform)
+            ->where('model_id', $modelId)
+            ->where('provider_key_id', $keyId)
+            ->where('window_type', $type)
+            ->where('window_starts_at', $window['start'])
+            ->value('token_count');
+
+        return $used + $estimatedTokens <= $limit;
+    }
+
+    private function incrementWindow(string $platform, string $modelId, int $keyId, string $type, int $requests, int $tokens): void
+    {
+        $window = $this->windowBounds($type);
+
+        DB::transaction(function () use ($platform, $modelId, $keyId, $type, $requests, $tokens, $window): void {
+            $row = AiDevApiRateWindow::query()
+                ->where('platform', $platform)
+                ->where('model_id', $modelId)
+                ->where('provider_key_id', $keyId)
+                ->where('window_type', $type)
+                ->where('window_starts_at', $window['start'])
+                ->lockForUpdate()
+                ->first();
+
+            if (! $row instanceof AiDevApiRateWindow) {
+                AiDevApiRateWindow::query()->create([
+                    'platform' => $platform,
+                    'model_id' => $modelId,
+                    'provider_key_id' => $keyId,
+                    'window_type' => $type,
+                    'window_starts_at' => $window['start'],
+                    'window_ends_at' => $window['end'],
+                    'request_count' => $requests,
+                    'token_count' => $tokens,
+                ]);
+
+                return;
+            }
+
+            $row->forceFill([
+                'request_count' => ((int) $row->request_count) + $requests,
+                'token_count' => ((int) $row->token_count) + $tokens,
+            ])->save();
+        });
+    }
+
+    /** @return array{start: CarbonImmutable, end: CarbonImmutable} */
+    private function windowBounds(string $type): array
+    {
+        $now = CarbonImmutable::now();
+
+        return match ($type) {
+            'rpm', 'tpm' => ['start' => $now->startOfMinute(), 'end' => $now->startOfMinute()->addMinute()],
+            'rpd', 'tpd' => ['start' => $now->startOfDay(), 'end' => $now->startOfDay()->addDay()],
+            default => ['start' => $now, 'end' => $now],
+        };
+    }
+}

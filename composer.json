@@ -1,45 +1,73 @@
 {
-    "name": ":vendor_slug/:package_slug",
-    "description": ":package_description",
+    "name": "ferdiunal/ai-dev-api",
+    "description": "Laravel AI SDK AI Dev API text provider with local key/model routing.",
     "keywords": [
-        ":vendor_name",
-        ":package_slug"
+        "ai",
+        "ai-dev-api",
+        "laravel",
+        "laravel-ai"
     ],
-    "homepage": "https://github.com/:vendor_slug/:package_slug",
+    "homepage": "https://github.com/ferdiunal/ai-dev-api",
     "license": "MIT",
     "authors": [
         {
-            "name": ":author_name",
-            "email": "author@domain.com",
+            "name": "Ferdi ÜNAL",
+            "email": "ferdiunal@outlook.com",
             "role": "Developer"
         }
     ],
     "require": {
-        "php": "^8.4"
+        "php": "^8.4",
+        "illuminate/console": "^13.0",
+        "illuminate/contracts": "^13.0",
+        "illuminate/database": "^13.0",
+        "illuminate/http": "^13.0",
+        "illuminate/support": "^13.0",
+        "laravel/ai": "^0.7",
+        "laravel/prompts": "^0.3.6"
     },
     "require-dev": {
-        :require_dev_testing,
-        :require_dev_codestyle,
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.0",
+        "orchestra/testbench": "^11.0",
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "phpstan/phpstan": "^2.1",
         "spatie/ray": "^1.28"
     },
     "autoload": {
         "psr-4": {
-            "VendorName\\Skeleton\\": "src"
+            "Ferdiunal\\AiDevApi\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "VendorName\\Skeleton\\Tests\\": "tests"
+            "Ferdiunal\\AiDevApi\\Tests\\": "tests/"
         }
     },
     "scripts": {
-        :scripts_testing,
-        :scripts_codestyle
+        "analyse": "vendor/bin/phpstan analyse -c phpstan.neon.dist src tests --level=6 --memory-limit=1G",
+        "format": "vendor/bin/pint",
+        "format:check": "vendor/bin/pint --test",
+        "test": "vendor/bin/pest",
+        "test:coverage": "vendor/bin/pest --coverage",
+        "ci": [
+            "@format:check",
+            "@analyse",
+            "@test"
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Ferdiunal\\AiDevApi\\AiDevApiServiceProvider"
+            ]
+        }
     },
     "config": {
         "sort-packages": true,
         "allow-plugins": {
-            :plugins_testing,
+            "pestphp/pest-plugin": true,
             "phpstan/extension-installer": true
         }
     },

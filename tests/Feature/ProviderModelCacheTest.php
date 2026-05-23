@@ -64,4 +64,60 @@ it('falls back to curated models when a provider cannot return a live model list
 
     expect(AiDevApiProviderModelCache::query()->where('provider_key_id', $key->getKey())->where('source', 'curated')->count())
         ->toBeGreaterThan(0);
+    expect($key->refresh()->status)->toBe('unknown');
+});
+
+it('marks provider keys invalid on model refresh auth failures without falling back to curated cache', function () {
+    migrateAiDevApiForCacheTests();
+
+    Http::fake([
+        'https://openrouter.ai/api/v1/models' => Http::response(['error' => ['message' => 'invalid api key']], 401),
+    ]);
+
+    $key = AiDevApiProviderKey::query()->create([
+        'platform' => 'openrouter',
+        'label' => 'Invalid',
+        'key' => 'key-openrouter-value-invalid',
+        'status' => 'unknown',
+        'enabled' => true,
+    ]);
+
+    $rows = app(ProviderModelCacheService::class)->refreshForKey($key);
+
+    expect($rows)->toBe([]);
+    expect($key->refresh()->status)->toBe('invalid');
+    expect($key->last_checked_at)->not->toBeNull();
+    expect(AiDevApiProviderModelCache::query()->where('provider_key_id', $key->getKey())->where('enabled', true)->count())->toBe(0);
+});
+
+it('excludes expired provider label model cache rows from model listings', function () {
+    migrateAiDevApiForCacheTests();
+
+    $key = AiDevApiProviderKey::query()->create([
+        'platform' => 'openrouter',
+        'label' => 'Primary',
+        'key' => 'key-openrouter-value-expired',
+        'status' => 'healthy',
+        'enabled' => true,
+        'models_cached_at' => now()->subDays(2),
+        'models_cache_expires_at' => now()->subMinute(),
+    ]);
+
+    AiDevApiProviderModelCache::query()->create([
+        'provider_key_id' => $key->getKey(),
+        'platform' => 'openrouter',
+        'provider_label' => 'Primary',
+        'model_id' => 'expired/model:free',
+        'display_name' => 'Expired Model',
+        'is_free' => true,
+        'enabled' => true,
+        'source' => 'live',
+        'checked_at' => now()->subDays(2),
+    ]);
+
+    $provider = app(AiManager::class)->textProvider('ai-dev-api');
+
+    expect($provider)->toBeInstanceOf(AiDevApiProvider::class);
+    assert($provider instanceof AiDevApiProvider);
+    expect($provider->models('openrouter', 'Primary', includeAuto: false))->toBe([]);
 });

@@ -33,6 +33,8 @@ final class ProviderAdapterRegistry
                 baseUrl: (string) $definition['base_url'],
                 extraHeaders: $platform === 'openrouter' ? array_filter(config('ai-dev-api.providers.openrouter.headers', [])) : [],
                 timeoutMs: (int) ($definition['timeout_ms'] ?? 15_000),
+                maxStreamLineBytes: max(1024, (int) config('ai-dev-api.streaming.max_line_bytes', 65_536)),
+                maxStreamEventBytes: max(1024, (int) config('ai-dev-api.streaming.max_event_bytes', 1_048_576)),
             );
         }
 

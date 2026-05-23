@@ -6,6 +6,7 @@ namespace Ferdiunal\AiDevApi\Gateway;
 
 use Closure;
 use Ferdiunal\AiDevApi\Adapters\ProviderAdapterRegistry;
+use Ferdiunal\AiDevApi\Exceptions\ProviderAuthenticationException;
 use Ferdiunal\AiDevApi\Routing\AiDevApiRouter;
 use Ferdiunal\AiDevApi\Routing\RateLimitWindowRepository;
 use Ferdiunal\AiDevApi\Routing\RouteResult;
@@ -101,6 +102,10 @@ final class AiDevApiTextGateway implements Gateway
             $category = $this->errorCategory($exception);
             $this->usageLogger->error($route, $exception, $category, $this->latencyMs($startedAt));
 
+            if ($route instanceof RouteResult && $category === 'auth') {
+                $this->router->recordAuthFailure($route);
+            }
+
             if ($route instanceof RouteResult && $category === 'rate_limit') {
                 $this->rateLimits->setCooldown($route->platform, $route->modelId, $route->keyId, (int) config('ai-dev-api.routing.cooldown_seconds', 120));
                 $this->router->recordRetryableFailure($route);
@@ -126,6 +131,10 @@ final class AiDevApiTextGateway implements Gateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): Generator {
+        if ($tools !== []) {
+            throw new LogicException('AI Dev API does not support streaming tool calls yet.');
+        }
+
         $startedAt = microtime(true);
         $payloadMessages = $this->mapMessages($instructions, $messages);
         $estimatedTokens = $this->estimateTokens($payloadMessages, $this->maxOutputTokens($options));
@@ -150,7 +159,7 @@ final class AiDevApiTextGateway implements Gateway
                 time(),
             ))->withInvocationId($invocationId);
 
-            foreach ($this->adapters->for($route->platform)->stream($route->apiKey, $payloadMessages, $route->modelId, $this->mapOptions($provider, $options, $schema)) as $chunk) {
+            foreach ($this->adapters->for($route->platform)->stream($route->apiKey, $payloadMessages, $route->modelId, $this->mapOptions($provider, $options, $schema), $timeout) as $chunk) {
                 if (isset($chunk['error'])) {
                     throw new RuntimeException((string) data_get($chunk, 'error.message', 'AI Dev API streaming error.'));
                 }
@@ -210,6 +219,10 @@ final class AiDevApiTextGateway implements Gateway
         } catch (Throwable $exception) {
             $category = $this->errorCategory($exception);
             $this->usageLogger->error($route, $exception, $category, $this->latencyMs($startedAt));
+
+            if ($route instanceof RouteResult && $category === 'auth') {
+                $this->router->recordAuthFailure($route);
+            }
 
             if ($route instanceof RouteResult && $category === 'rate_limit') {
                 $this->rateLimits->setCooldown($route->platform, $route->modelId, $route->keyId, (int) config('ai-dev-api.routing.cooldown_seconds', 120));
@@ -411,6 +424,10 @@ final class AiDevApiTextGateway implements Gateway
 
     private function errorCategory(Throwable $exception): string
     {
+        if ($exception instanceof ProviderAuthenticationException) {
+            return 'auth';
+        }
+
         $message = strtolower($exception->getMessage());
 
         return match (true) {

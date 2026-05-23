@@ -61,3 +61,49 @@ it('records provider label, model, token usage, and latency for successful promp
         ->and($request->output_tokens)->toBe(4)
         ->and($request->total_tokens)->toBe(7);
 });
+
+it('marks routed provider keys invalid when completions return auth failures', function () {
+    migrateAiDevApiForUsageTests();
+    app(SeedModelCatalog::class)->seed();
+
+    $key = AiDevApiProviderKey::query()->create([
+        'platform' => 'openrouter',
+        'label' => 'Primary',
+        'key' => 'key-openrouter-value-invalid',
+        'status' => 'healthy',
+        'enabled' => true,
+    ]);
+
+    Http::fake([
+        'https://openrouter.ai/api/v1/chat/completions' => Http::response([
+            'error' => ['message' => 'quota exceeded for invalid api key'],
+        ], 401),
+    ]);
+
+    $agent = new class implements Agent
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'Türkçe cevap ver.';
+        }
+    };
+
+    $thrown = null;
+
+    try {
+        $agent->prompt('Selam', provider: 'ai-dev-api', model: 'auto');
+    } catch (RuntimeException $exception) {
+        $thrown = $exception;
+    }
+
+    expect($thrown)->toBeInstanceOf(RuntimeException::class);
+    expect($thrown?->getMessage())->toContain('401');
+
+    expect($key->refresh()->status)->toBe('invalid');
+
+    $request = AiDevApiRequest::query()->firstOrFail();
+    expect($request->status)->toBe('error');
+    expect($request->error_category)->toBe('auth');
+});

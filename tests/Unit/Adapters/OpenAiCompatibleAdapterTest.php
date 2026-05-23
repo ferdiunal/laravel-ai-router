@@ -116,3 +116,44 @@ it('keeps null content when compatible response contains tool calls', function (
 
     expect($response['choices'][0]['message']['content'])->toBeNull();
 });
+
+it('rejects SSE stream lines that exceed the configured buffer limit', function () {
+    Http::fake([
+        'https://api.example.com/v1/chat/completions' => Http::response('data: '.str_repeat('x', 64)."\n\n", 200, [
+            'Content-Type' => 'text/event-stream',
+        ]),
+    ]);
+
+    $adapter = new OpenAiCompatibleAdapter(
+        platform: 'example',
+        name: 'Example',
+        baseUrl: 'https://api.example.com/v1',
+        maxStreamLineBytes: 16,
+    );
+
+    iterator_to_array($adapter->stream('key', [['role' => 'user', 'content' => 'Hi']], 'model-a'));
+})->throws(RuntimeException::class, 'SSE line exceeded the configured 16 byte limit.');
+
+it('rejects SSE events that exceed the configured aggregate buffer limit', function () {
+    Http::fake([
+        'https://api.example.com/v1/chat/completions' => Http::response(implode("\n", [
+            'data: 12345678',
+            'data: 12345678',
+            'data: 12345678',
+            'data: 12345678',
+            '',
+        ]), 200, [
+            'Content-Type' => 'text/event-stream',
+        ]),
+    ]);
+
+    $adapter = new OpenAiCompatibleAdapter(
+        platform: 'example',
+        name: 'Example',
+        baseUrl: 'https://api.example.com/v1',
+        maxStreamLineBytes: 64,
+        maxStreamEventBytes: 32,
+    );
+
+    iterator_to_array($adapter->stream('key', [['role' => 'user', 'content' => 'Hi']], 'model-a'));
+})->throws(RuntimeException::class, 'SSE event exceeded the configured 32 byte limit.');

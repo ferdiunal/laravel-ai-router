@@ -20,6 +20,11 @@ return [
         'max_penalty' => env('AI_DEV_API_MAX_PENALTY', 10),
     ],
 
+    'streaming' => [
+        'max_line_bytes' => env('AI_DEV_API_STREAM_MAX_LINE_BYTES', 65_536),
+        'max_event_bytes' => env('AI_DEV_API_STREAM_MAX_EVENT_BYTES', 1_048_576),
+    ],
+
     'database' => [
         'connection' => env('AI_DEV_API_DB_CONNECTION'),
         'sqlite' => [

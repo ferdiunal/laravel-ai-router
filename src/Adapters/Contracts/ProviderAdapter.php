@@ -24,7 +24,7 @@ interface ProviderAdapter
      * @param  array<string, mixed>  $options
      * @return Generator<int, array<string, mixed>>
      */
-    public function stream(string $apiKey, array $messages, string $modelId, array $options = []): Generator;
+    public function stream(string $apiKey, array $messages, string $modelId, array $options = [], ?int $timeout = null): Generator;
 
     /**
      * @return array<int, array<string, mixed>>

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Ferdiunal\AiDevApi\Adapters;
 
 use Ferdiunal\AiDevApi\Adapters\Contracts\ProviderAdapter;
+use Ferdiunal\AiDevApi\Exceptions\ProviderAuthenticationException;
 use Generator;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use Psr\Http\Message\StreamInterface;
@@ -21,6 +23,8 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         private readonly array $extraHeaders = [],
         private readonly ?string $validateUrl = null,
         private readonly int $timeoutMs = 15_000,
+        private readonly int $maxStreamLineBytes = 65_536,
+        private readonly int $maxStreamEventBytes = 1_048_576,
     ) {}
 
     public function platform(): string
@@ -41,11 +45,7 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
             ->acceptJson()
             ->post($this->endpoint('chat/completions'), $this->payload($messages, $modelId, $options));
 
-        if (! $response->successful()) {
-            $message = data_get($response->json(), 'error.message', $response->reason());
-
-            throw new RuntimeException("{$this->name} API error {$response->status()}: {$message}");
-        }
+        $this->throwIfUnsuccessful($response, 'API error');
 
         $data = $response->json();
         $this->normalizeChoices($data);
@@ -54,20 +54,16 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         return $data;
     }
 
-    public function stream(string $apiKey, array $messages, string $modelId, array $options = []): Generator
+    public function stream(string $apiKey, array $messages, string $modelId, array $options = [], ?int $timeout = null): Generator
     {
-        $response = Http::timeout($this->timeoutSeconds())
+        $response = Http::timeout($this->timeoutSeconds($timeout))
             ->withToken($apiKey)
             ->withHeaders($this->extraHeaders)
             ->accept('text/event-stream')
             ->withOptions(['stream' => true])
             ->post($this->endpoint('chat/completions'), $this->streamPayload($messages, $modelId, $options));
 
-        if (! $response->successful()) {
-            $message = data_get($response->json(), 'error.message', $response->reason());
-
-            throw new RuntimeException("{$this->name} streaming API error {$response->status()}: {$message}");
-        }
+        $this->throwIfUnsuccessful($response, 'streaming API error');
 
         yield from $this->parseServerSentEvents($response->toPsrResponse()->getBody());
     }
@@ -80,11 +76,7 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
             ->acceptJson()
             ->get($this->endpoint('models'));
 
-        if (! $response->successful()) {
-            $message = data_get($response->json(), 'error.message', $response->reason());
-
-            throw new RuntimeException("{$this->name} models API error {$response->status()}: {$message}");
-        }
+        $this->throwIfUnsuccessful($response, 'models API error');
 
         $data = $response->json();
 
@@ -116,9 +108,28 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         return rtrim($this->baseUrl, '/').'/'.ltrim($path, '/');
     }
 
-    private function timeoutSeconds(): float
+    private function timeoutSeconds(?int $timeout = null): float
     {
+        if ($timeout !== null) {
+            return max(1, $timeout);
+        }
+
         return max(1, $this->timeoutMs / 1000);
+    }
+
+    private function throwIfUnsuccessful(Response $response, string $context): void
+    {
+        if ($response->successful()) {
+            return;
+        }
+
+        $message = (string) data_get($response->json(), 'error.message', $response->reason());
+
+        if (in_array($response->status(), [401, 403], true)) {
+            throw new ProviderAuthenticationException($this->name, $response->status(), $message);
+        }
+
+        throw new RuntimeException("{$this->name} {$context} {$response->status()}: {$message}");
     }
 
     /**
@@ -158,25 +169,68 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
     /** @return Generator<int, array<string, mixed>> */
     private function parseServerSentEvents(StreamInterface $streamBody): Generator
     {
-        while (! $streamBody->eof()) {
-            $line = trim($this->readLine($streamBody));
+        $dataLines = [];
+        $eventBytes = 0;
 
-            if ($line === '' || ! str_starts_with($line, 'data:')) {
+        while (! $streamBody->eof()) {
+            $line = rtrim($this->readLine($streamBody), "\r\n");
+
+            if ($line === '') {
+                $event = $this->decodeServerSentEvent($dataLines);
+                $dataLines = [];
+                $eventBytes = 0;
+
+                if ($event === '__done__') {
+                    return;
+                }
+
+                if (is_array($event)) {
+                    yield $event;
+                }
+
                 continue;
             }
 
-            $payload = trim(substr($line, 5));
-
-            if ($payload === '[DONE]') {
-                return;
+            if (! str_starts_with($line, 'data:')) {
+                continue;
             }
 
-            $decoded = json_decode($payload, true);
+            $dataLine = ltrim(substr($line, 5), ' ');
+            $eventBytes += strlen($dataLine) + 1;
 
-            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                yield $decoded;
+            if ($eventBytes > $this->maxStreamEventBytes) {
+                throw new RuntimeException("SSE event exceeded the configured {$this->maxStreamEventBytes} byte limit.");
             }
+
+            $dataLines[] = $dataLine;
         }
+
+        $event = $this->decodeServerSentEvent($dataLines);
+
+        if (is_array($event)) {
+            yield $event;
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $dataLines
+     * @return array<string, mixed>|'__done__'|null
+     */
+    private function decodeServerSentEvent(array $dataLines): array|string|null
+    {
+        if ($dataLines === []) {
+            return null;
+        }
+
+        $payload = trim(implode("\n", $dataLines));
+
+        if ($payload === '[DONE]') {
+            return '__done__';
+        }
+
+        $decoded = json_decode($payload, true);
+
+        return json_last_error() === JSON_ERROR_NONE && is_array($decoded) ? $decoded : null;
     }
 
     private function readLine(StreamInterface $streamBody): string
@@ -191,6 +245,10 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
             }
 
             $buffer .= $byte;
+
+            if (strlen($buffer) > $this->maxStreamLineBytes) {
+                throw new RuntimeException("SSE line exceeded the configured {$this->maxStreamLineBytes} byte limit.");
+            }
 
             if ($byte === "\n") {
                 break;

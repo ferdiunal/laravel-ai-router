@@ -106,6 +106,20 @@ final class AiDevApiRouter
         ])->save();
     }
 
+    public function recordAuthFailure(RouteResult $route): void
+    {
+        $key = AiDevApiProviderKey::query()->find($route->keyId);
+
+        if (! $key instanceof AiDevApiProviderKey) {
+            return;
+        }
+
+        $key->forceFill([
+            'status' => 'invalid',
+            'last_checked_at' => now(),
+        ])->save();
+    }
+
     private function firstUsableKey(AiDevApiModel $model, int $estimatedTokens): ?AiDevApiProviderKey
     {
         $keys = AiDevApiProviderKey::query()
@@ -154,6 +168,10 @@ final class AiDevApiRouter
 
         if (! $hasCacheRows) {
             return true;
+        }
+
+        if ($key->models_cache_expires_at !== null && $key->models_cache_expires_at->isPast()) {
+            return false;
         }
 
         return AiDevApiProviderModelCache::query()

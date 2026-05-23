@@ -6,6 +6,7 @@ namespace Ferdiunal\AiDevApi\Services;
 
 use Ferdiunal\AiDevApi\Adapters\ProviderAdapterRegistry;
 use Ferdiunal\AiDevApi\Catalog\ModelCatalog;
+use Ferdiunal\AiDevApi\Exceptions\ProviderAuthenticationException;
 use Ferdiunal\AiDevApi\Models\AiDevApiModel;
 use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
 use Ferdiunal\AiDevApi\Models\AiDevApiProviderModelCache;
@@ -27,6 +28,11 @@ final class ProviderModelCacheService
             if ($this->adapters->has($key->platform)) {
                 $models = $this->adapters->for($key->platform)->models((string) $key->key);
             }
+        } catch (ProviderAuthenticationException) {
+            $this->disableCacheRows($key);
+            $this->markKeyInvalid($key);
+
+            return [];
         } catch (Throwable) {
             $models = [];
         }
@@ -38,9 +44,7 @@ final class ProviderModelCacheService
             $source = 'curated';
         }
 
-        AiDevApiProviderModelCache::query()
-            ->where('provider_key_id', $key->getKey())
-            ->update(['enabled' => false]);
+        $this->disableCacheRows($key);
 
         $rows = [];
         foreach ($models as $model) {
@@ -86,7 +90,15 @@ final class ProviderModelCacheService
         try {
             $query = AiDevApiProviderModelCache::query()
                 ->where('enabled', true)
-                ->where('is_free', true);
+                ->where('is_free', true)
+                ->whereHas('providerKey', function ($query): void {
+                    $query->where('enabled', true)
+                        ->where('status', '!=', 'invalid')
+                        ->where(function ($query): void {
+                            $query->whereNull('models_cache_expires_at')
+                                ->orWhere('models_cache_expires_at', '>=', now());
+                        });
+                });
 
             if ($provider !== null) {
                 $query->where('platform', $provider);
@@ -101,7 +113,7 @@ final class ProviderModelCacheService
             $ids = [];
         }
 
-        if ($ids === []) {
+        if ($ids === [] && $label === null) {
             $ids = collect(ModelCatalog::all())
                 ->when($provider !== null, fn ($models) => $models->where('platform', $provider))
                 ->where('enabled', true)
@@ -130,6 +142,10 @@ final class ProviderModelCacheService
 
     public function cachedCountForKey(AiDevApiProviderKey $key): int
     {
+        if ($key->models_cache_expires_at !== null && $key->models_cache_expires_at->isPast()) {
+            return 0;
+        }
+
         return (int) AiDevApiProviderModelCache::query()
             ->where('provider_key_id', $key->getKey())
             ->where('enabled', true)
@@ -182,5 +198,20 @@ final class ProviderModelCacheService
         }
 
         return in_array($platform, ['kilo', 'pollinations', 'llm7'], true);
+    }
+
+    private function markKeyInvalid(AiDevApiProviderKey $key): void
+    {
+        $key->forceFill([
+            'status' => 'invalid',
+            'last_checked_at' => now(),
+        ])->save();
+    }
+
+    private function disableCacheRows(AiDevApiProviderKey $key): void
+    {
+        AiDevApiProviderModelCache::query()
+            ->where('provider_key_id', $key->getKey())
+            ->update(['enabled' => false]);
     }
 }

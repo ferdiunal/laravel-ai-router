@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 use Ferdiunal\AiDevApi\Catalog\SeedModelCatalog;
 use Ferdiunal\AiDevApi\Exceptions\ModelNotFoundException;
+use Ferdiunal\AiDevApi\Exceptions\NoAvailableModelException;
 use Ferdiunal\AiDevApi\Models\AiDevApiModel;
 use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
+use Ferdiunal\AiDevApi\Models\AiDevApiProviderModelCache;
 use Ferdiunal\AiDevApi\Routing\AiDevApiRouter;
 
 function migrateAiDevApiForRouterTests(): void
@@ -67,6 +69,40 @@ it('skips disabled and invalid provider keys', function () {
 
     expect($route->apiKey)->toBe('key-healthy-value-123456');
 });
+
+it('does not route through expired provider model cache rows', function () {
+    migrateAiDevApiForRouterTests();
+    app(SeedModelCatalog::class)->seed();
+
+    $model = AiDevApiModel::query()
+        ->where('platform', 'openrouter')
+        ->where('model_id', 'qwen/qwen3-coder:free')
+        ->firstOrFail();
+
+    $key = AiDevApiProviderKey::query()->create([
+        'platform' => $model->platform,
+        'label' => 'Expired Cache',
+        'key' => 'key-expired-cache-value-123456',
+        'status' => 'healthy',
+        'enabled' => true,
+        'models_cached_at' => now()->subDays(2),
+        'models_cache_expires_at' => now()->subMinute(),
+    ]);
+
+    AiDevApiProviderModelCache::query()->create([
+        'provider_key_id' => $key->getKey(),
+        'platform' => $model->platform,
+        'provider_label' => 'Expired Cache',
+        'model_id' => $model->model_id,
+        'display_name' => $model->display_name,
+        'is_free' => true,
+        'enabled' => true,
+        'source' => 'live',
+        'checked_at' => now()->subDays(2),
+    ]);
+
+    app(AiDevApiRouter::class)->route($model->model_id);
+})->throws(NoAvailableModelException::class, 'No enabled valid key is available');
 
 it('fails clearly for unknown specific model ids', function () {
     migrateAiDevApiForRouterTests();

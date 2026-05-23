@@ -17,7 +17,7 @@ interface ProviderAdapter
      * @param  array<string, mixed>  $options
      * @return array<string, mixed>
      */
-    public function complete(string $apiKey, array $messages, string $modelId, array $options = []): array;
+    public function complete(string $apiKey, array $messages, string $modelId, array $options = [], ?int $timeout = null): array;
 
     /**
      * @param  array<int, array<string, mixed>>  $messages

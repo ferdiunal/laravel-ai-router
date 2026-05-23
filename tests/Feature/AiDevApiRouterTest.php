@@ -104,6 +104,78 @@ it('does not route through expired provider model cache rows', function () {
     app(AiDevApiRouter::class)->route($model->model_id);
 })->throws(NoAvailableModelException::class, 'No enabled valid key is available');
 
+it('does not route tool prompts through cached models that do not support tools', function () {
+    migrateAiDevApiForRouterTests();
+    app(SeedModelCatalog::class)->seed();
+
+    $model = AiDevApiModel::query()
+        ->where('platform', 'openrouter')
+        ->where('model_id', 'qwen/qwen3-coder:free')
+        ->firstOrFail();
+
+    $key = AiDevApiProviderKey::query()->create([
+        'platform' => $model->platform,
+        'label' => 'No Tools',
+        'key' => 'key-no-tools-value-123456',
+        'status' => 'healthy',
+        'enabled' => true,
+        'models_cached_at' => now(),
+        'models_cache_expires_at' => now()->addHour(),
+    ]);
+
+    AiDevApiProviderModelCache::query()->create([
+        'provider_key_id' => $key->getKey(),
+        'platform' => $model->platform,
+        'provider_label' => 'No Tools',
+        'model_id' => $model->model_id,
+        'display_name' => $model->display_name,
+        'is_free' => true,
+        'supports_tools' => false,
+        'enabled' => true,
+        'source' => 'live',
+        'checked_at' => now(),
+    ]);
+
+    app(AiDevApiRouter::class)->route($model->model_id, 1000, requiresTools: true);
+})->throws(NoAvailableModelException::class, 'No enabled valid key is available');
+
+it('routes tool prompts through cached models with unknown tool support', function () {
+    migrateAiDevApiForRouterTests();
+    app(SeedModelCatalog::class)->seed();
+
+    $model = AiDevApiModel::query()
+        ->where('platform', 'openrouter')
+        ->where('model_id', 'qwen/qwen3-coder:free')
+        ->firstOrFail();
+
+    $key = AiDevApiProviderKey::query()->create([
+        'platform' => $model->platform,
+        'label' => 'Unknown Tools',
+        'key' => 'key-unknown-tools-value-123456',
+        'status' => 'healthy',
+        'enabled' => true,
+        'models_cached_at' => now(),
+        'models_cache_expires_at' => now()->addHour(),
+    ]);
+
+    AiDevApiProviderModelCache::query()->create([
+        'provider_key_id' => $key->getKey(),
+        'platform' => $model->platform,
+        'provider_label' => 'Unknown Tools',
+        'model_id' => $model->model_id,
+        'display_name' => $model->display_name,
+        'is_free' => true,
+        'supports_tools' => null,
+        'enabled' => true,
+        'source' => 'live',
+        'checked_at' => now(),
+    ]);
+
+    $route = app(AiDevApiRouter::class)->route($model->model_id, 1000, requiresTools: true);
+
+    expect($route->apiKey)->toBe('key-unknown-tools-value-123456');
+});
+
 it('fails clearly for unknown specific model ids', function () {
     migrateAiDevApiForRouterTests();
     app(SeedModelCatalog::class)->seed();

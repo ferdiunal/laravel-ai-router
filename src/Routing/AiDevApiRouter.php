@@ -19,7 +19,7 @@ final class AiDevApiRouter
         private readonly RateLimitWindowRepository $rateLimits,
     ) {}
 
-    public function route(?string $modelId = 'auto', int $estimatedTokens = 1000): RouteResult
+    public function route(?string $modelId = 'auto', int $estimatedTokens = 1000, bool $requiresTools = false): RouteResult
     {
         if ($modelId !== null && $modelId !== '' && $modelId !== 'auto') {
             $models = AiDevApiModel::query()
@@ -37,7 +37,7 @@ final class AiDevApiRouter
                     continue;
                 }
 
-                $key = $this->firstUsableKey($model, $estimatedTokens);
+                $key = $this->firstUsableKey($model, $estimatedTokens, $requiresTools);
 
                 if ($key instanceof AiDevApiProviderKey) {
                     return $this->toResult($model, $key);
@@ -63,7 +63,7 @@ final class AiDevApiRouter
                 continue;
             }
 
-            $key = $this->firstUsableKey($model, $estimatedTokens);
+            $key = $this->firstUsableKey($model, $estimatedTokens, $requiresTools);
 
             if (! $key instanceof AiDevApiProviderKey) {
                 continue;
@@ -120,7 +120,7 @@ final class AiDevApiRouter
         ])->save();
     }
 
-    private function firstUsableKey(AiDevApiModel $model, int $estimatedTokens): ?AiDevApiProviderKey
+    private function firstUsableKey(AiDevApiModel $model, int $estimatedTokens, bool $requiresTools): ?AiDevApiProviderKey
     {
         $keys = AiDevApiProviderKey::query()
             ->where('platform', $model->platform)
@@ -131,7 +131,7 @@ final class AiDevApiRouter
             ->get();
 
         foreach ($keys as $key) {
-            if (! $this->keySupportsModel($key, $model)) {
+            if (! $this->keySupportsModel($key, $model, $requiresTools)) {
                 continue;
             }
 
@@ -160,7 +160,7 @@ final class AiDevApiRouter
         return null;
     }
 
-    private function keySupportsModel(AiDevApiProviderKey $key, AiDevApiModel $model): bool
+    private function keySupportsModel(AiDevApiProviderKey $key, AiDevApiModel $model, bool $requiresTools): bool
     {
         $hasCacheRows = AiDevApiProviderModelCache::query()
             ->where('provider_key_id', $key->getKey())
@@ -174,12 +174,20 @@ final class AiDevApiRouter
             return false;
         }
 
-        return AiDevApiProviderModelCache::query()
+        $cacheQuery = AiDevApiProviderModelCache::query()
             ->where('provider_key_id', $key->getKey())
             ->where('model_id', $model->model_id)
             ->where('enabled', true)
-            ->where('is_free', true)
-            ->exists();
+            ->where('is_free', true);
+
+        if ($requiresTools) {
+            $cacheQuery->where(function ($query): void {
+                $query->where('supports_tools', true)
+                    ->orWhereNull('supports_tools');
+            });
+        }
+
+        return $cacheQuery->exists();
     }
 
     private function toResult(AiDevApiModel $model, AiDevApiProviderKey $key): RouteResult

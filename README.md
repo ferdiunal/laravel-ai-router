@@ -11,6 +11,9 @@ Laravel AI SDK için provider/key/model routing paketi. Amaç: birden fazla ücr
 - Provider + label bazlı free model cache
 - `AiDevApiProvider::models()` ile cachelenmiş model id erişimi
 - Non-streaming ve streaming text gateway desteği
+- Laravel AI structured output desteği (`StructuredTextResponse` / `StructuredAgentResponse`)
+- OpenAI-compatible function tool-call loop desteği (non-stream)
+- Laravel AI failover için retryable hata mapping'i (`RateLimitedException`, `InsufficientCreditsException`, `ProviderOverloadedException`)
 - Request/usage analytics: provider, label, model, token, latency, error category
 - SQLite için config kontrollü WAL/PRAGMA optimizasyonu
 - Laravel Prompts tabanlı interaktif Artisan komutları
@@ -107,6 +110,58 @@ $response = ai()
 ```
 
 Streaming path de desteklenir; OpenAI-compatible SSE chunk'ları Laravel AI stream eventlerine çevrilir.
+
+Agent attribute kullanımı:
+
+```php
+use Laravel\Ai\Attributes\Model;
+use Laravel\Ai\Attributes\Provider;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Promptable;
+
+#[Provider('ai-dev-api')]
+#[Model('auto')]
+final class SupportAgent implements Agent
+{
+    use Promptable;
+
+    public function instructions(): string
+    {
+        return 'Kısa, net ve Türkçe cevap ver.';
+    }
+}
+```
+
+Structured output için Laravel AI `HasStructuredOutput` contract'ı desteklenir. Paket upstream'e JSON mode gönderir, dönen JSON metnini SDK'nın `StructuredTextResponse` / `StructuredAgentResponse` tiplerine çevirir.
+
+Tool kullanımı non-stream akışta desteklenir: provider `tool_calls` döndürürse paket tool'u çalıştırır, sonucu `tool` mesajı olarak upstream'e geri gönderir ve final cevabı döndürür. Streaming tool-call akışı henüz desteklenmediği için provider stream açılmadan açık `LogicException` fırlatılır.
+
+Failover örneği:
+
+```php
+$response = SupportAgent::make()->prompt(
+    'Sipariş durumunu özetle.',
+    provider: [
+        'ai-dev-api' => 'auto',
+        'openai' => 'gpt-4o-mini',
+    ],
+    timeout: 20,
+);
+```
+
+`429/rate limit`, yetersiz kredi/kota ve geçici provider overload/timeout hataları Laravel AI failover exception tiplerine map edilir. Böylece provider array kullanan agent'larda SDK bir sonraki provider/model çiftine geçebilir.
+
+## Laravel AI SDK destek matrisi
+
+| Capability | Durum | Not |
+| --- | --- | --- |
+| Text generation | Destekleniyor | `TextResponse`, usage, meta, assistant messages ve step bilgisi döner. |
+| Text streaming | Destekleniyor | `StreamStart`, `TextStart`, `TextDelta`, `TextEnd`, `StreamEnd`; SSE line/event byte limitleri var. |
+| Structured output | Destekleniyor | JSON mode + SDK `StructuredTextResponse` / `StructuredAgentResponse`. |
+| Function tools | Non-stream destekleniyor | OpenAI-compatible `tools`/`tool_calls` loop'u, tool callbacks ve step aggregation desteklenir. |
+| Streaming tools | Bilerek kapalı | Provider stream açılmadan `LogicException`; kısmi/yanlış tool stream yok. |
+| Failover | Destekleniyor | Rate limit, insufficient credits/quota, timeout/overload SDK failover exception tiplerine map edilir. |
+| Image/audio/transcription/embeddings/reranking/files/stores | Desteklenmiyor | Provider yalnızca `TextProvider` advertise eder; gateway contract gereği unsupported methodlar açık hata verir. |
 
 ## Kullanım istatistikleri
 

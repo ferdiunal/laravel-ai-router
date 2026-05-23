@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Ferdiunal\AiDevApi\Gateway;
 
-use Closure;
 use Ferdiunal\AiDevApi\Adapters\ProviderAdapterRegistry;
 use Ferdiunal\AiDevApi\Exceptions\ProviderAuthenticationException;
 use Ferdiunal\AiDevApi\Routing\AiDevApiRouter;
@@ -12,6 +11,8 @@ use Ferdiunal\AiDevApi\Routing\RateLimitWindowRepository;
 use Ferdiunal\AiDevApi\Routing\RouteResult;
 use Ferdiunal\AiDevApi\Services\UsageLogger;
 use Generator;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -24,17 +25,29 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Files\Image;
+use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider as BaseProvider;
+use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Responses\AudioResponse;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Step;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
+use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -42,12 +55,15 @@ use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
+use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
 use RuntimeException;
 use Throwable;
 
 final class AiDevApiTextGateway implements Gateway
 {
+    use InvokesTools;
+
     public function __construct(
         private readonly AiDevApiRouter $router,
         private readonly ProviderAdapterRegistry $adapters,
@@ -76,28 +92,35 @@ final class AiDevApiTextGateway implements Gateway
         $route = null;
 
         try {
-            $route = $this->router->route($model, $estimatedTokens);
+            $route = $this->router->route($model, $estimatedTokens, requiresTools: $tools !== []);
             $this->rateLimits->recordRequest($route->platform, $route->modelId, $route->keyId);
 
             $data = $this->adapters
                 ->for($route->platform)
-                ->complete($route->apiKey, $payloadMessages, $route->modelId, $this->mapOptions($provider, $options, $schema));
+                ->complete($route->apiKey, $payloadMessages, $route->modelId, $this->mapOptions($provider, $options, $schema, $tools), $timeout);
 
-            $inputTokens = (int) data_get($data, 'usage.prompt_tokens', 0);
-            $outputTokens = (int) data_get($data, 'usage.completion_tokens', 0);
-            $totalTokens = (int) data_get($data, 'usage.total_tokens', $inputTokens + $outputTokens);
+            $response = $this->processCompletionResponse(
+                data: $data,
+                provider: $provider,
+                route: $route,
+                tools: $tools,
+                schema: $schema,
+                options: $options,
+                payloadMessages: $payloadMessages,
+                steps: new Collection,
+                responseMessages: new Collection,
+                timeout: $timeout,
+            );
+
+            $inputTokens = $response->usage->promptTokens;
+            $outputTokens = $response->usage->completionTokens;
+            $totalTokens = $inputTokens + $outputTokens;
 
             $this->rateLimits->recordTokens($route->platform, $route->modelId, $route->keyId, $totalTokens);
             $this->router->recordSuccess($route);
             $this->usageLogger->success($route, $inputTokens, $outputTokens, $this->latencyMs($startedAt));
 
-            $text = $this->contentFromResponse($data);
-
-            return (new TextResponse(
-                text: $text,
-                usage: new Usage($inputTokens, $outputTokens),
-                meta: new Meta($this->providerDriver($provider), $route->modelId),
-            ))->withMessages(new Collection([new AssistantMessage($text)]));
+            return $response;
         } catch (Throwable $exception) {
             $category = $this->errorCategory($exception);
             $this->usageLogger->error($route, $exception, $category, $this->latencyMs($startedAt));
@@ -106,12 +129,12 @@ final class AiDevApiTextGateway implements Gateway
                 $this->router->recordAuthFailure($route);
             }
 
-            if ($route instanceof RouteResult && $category === 'rate_limit') {
+            if ($route instanceof RouteResult && $this->shouldCooldownRoute($category)) {
                 $this->rateLimits->setCooldown($route->platform, $route->modelId, $route->keyId, (int) config('ai-dev-api.routing.cooldown_seconds', 120));
                 $this->router->recordRetryableFailure($route);
             }
 
-            throw $exception;
+            throw $this->mapExceptionForSdk($exception, $provider, $category);
         }
     }
 
@@ -140,6 +163,7 @@ final class AiDevApiTextGateway implements Gateway
         $estimatedTokens = $this->estimateTokens($payloadMessages, $this->maxOutputTokens($options));
         $route = null;
         $messageId = $this->eventId();
+        $streamStarted = false;
         $textStarted = false;
         $textEnded = false;
         $finishReason = 'stop';
@@ -152,16 +176,20 @@ final class AiDevApiTextGateway implements Gateway
             $route = $this->router->route($model, $estimatedTokens);
             $this->rateLimits->recordRequest($route->platform, $route->modelId, $route->keyId);
 
-            yield (new StreamStart(
-                $this->eventId(),
-                $this->providerDriver($provider),
-                $route->modelId,
-                time(),
-            ))->withInvocationId($invocationId);
-
             foreach ($this->adapters->for($route->platform)->stream($route->apiKey, $payloadMessages, $route->modelId, $this->mapOptions($provider, $options, $schema), $timeout) as $chunk) {
                 if (isset($chunk['error'])) {
                     throw new RuntimeException((string) data_get($chunk, 'error.message', 'AI Dev API streaming error.'));
+                }
+
+                if (! $streamStarted) {
+                    $streamStarted = true;
+
+                    yield (new StreamStart(
+                        $this->eventId(),
+                        $this->providerName($provider),
+                        $route->modelId,
+                        time(),
+                    ))->withInvocationId($invocationId);
                 }
 
                 $usage = $this->streamUsage($chunk);
@@ -224,18 +252,13 @@ final class AiDevApiTextGateway implements Gateway
                 $this->router->recordAuthFailure($route);
             }
 
-            if ($route instanceof RouteResult && $category === 'rate_limit') {
+            if ($route instanceof RouteResult && $this->shouldCooldownRoute($category)) {
                 $this->rateLimits->setCooldown($route->platform, $route->modelId, $route->keyId, (int) config('ai-dev-api.routing.cooldown_seconds', 120));
                 $this->router->recordRetryableFailure($route);
             }
 
-            throw $exception;
+            throw $this->mapExceptionForSdk($exception, $provider, $category);
         }
-    }
-
-    public function onToolInvocation(Closure $invoking, Closure $invoked): self
-    {
-        return $this;
     }
 
     public function generateAudio(
@@ -298,6 +321,21 @@ final class AiDevApiTextGateway implements Gateway
                 throw new LogicException('AI Dev API does not support file or image attachments yet.');
             }
 
+            if ($message instanceof AssistantMessage) {
+                $mapped[] = $this->assistantMessagePayload($message);
+
+                continue;
+            }
+
+            if ($message instanceof ToolResultMessage) {
+                $mapped = [
+                    ...$mapped,
+                    ...$this->toolResultPayloads($message->toolResults->all()),
+                ];
+
+                continue;
+            }
+
             $role = $message->role->value;
             if ($role === 'tool_result') {
                 $role = 'tool';
@@ -311,9 +349,10 @@ final class AiDevApiTextGateway implements Gateway
 
     /**
      * @param  array<string, Type>|null  $schema
+     * @param  array<int, Tool>  $tools
      * @return array<string, mixed>
      */
-    private function mapOptions(TextProvider $provider, ?TextGenerationOptions $options, ?array $schema): array
+    private function mapOptions(TextProvider $provider, ?TextGenerationOptions $options, ?array $schema, array $tools = []): array
     {
         if ($options === null) {
             $mapped = [];
@@ -333,7 +372,300 @@ final class AiDevApiTextGateway implements Gateway
             $mapped['response_format'] = ['type' => 'json_object'];
         }
 
+        if ($tools !== []) {
+            $mapped['tools'] = $this->mapTools($tools);
+            $mapped['tool_choice'] = 'auto';
+        }
+
         return $mapped;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  array<int, Tool>  $tools
+     * @param  array<string, Type>|null  $schema
+     * @param  array<int, array<string, mixed>>  $payloadMessages
+     * @param  Collection<int, Step>  $steps
+     * @param  Collection<int, Message>  $responseMessages
+     */
+    private function processCompletionResponse(
+        array $data,
+        TextProvider $provider,
+        RouteResult $route,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        array $payloadMessages,
+        Collection $steps,
+        Collection $responseMessages,
+        ?int $timeout,
+    ): TextResponse {
+        $text = $this->contentFromResponse($data);
+        $usage = $this->usageFromResponse($data);
+        $finishReason = $this->finishReasonFromResponse($data);
+        $toolCalls = $this->toolCallsFromResponse($data);
+        $meta = new Meta($this->providerName($provider), $route->modelId);
+
+        $step = new Step($text, $toolCalls, [], $finishReason, $usage, $meta);
+        $steps->push($step);
+
+        $assistantMessage = new AssistantMessage($text, new Collection($toolCalls));
+        $responseMessages->push($assistantMessage);
+
+        if ($finishReason === FinishReason::ToolCalls && $toolCalls !== [] && $steps->count() < $this->maxToolSteps($tools, $options)) {
+            $toolResults = $this->executeToolCalls($toolCalls, $tools);
+
+            if ($toolResults !== []) {
+                $steps->pop();
+                $steps->push(new Step($text, $toolCalls, $toolResults, $finishReason, $usage, $meta));
+
+                $toolResultMessage = new ToolResultMessage(new Collection($toolResults));
+                $responseMessages->push($toolResultMessage);
+
+                $nextPayloadMessages = [
+                    ...$payloadMessages,
+                    $this->assistantMessagePayload($assistantMessage),
+                    ...$this->toolResultPayloads($toolResults),
+                ];
+
+                $this->rateLimits->recordRequest($route->platform, $route->modelId, $route->keyId);
+
+                $nextData = $this->adapters
+                    ->for($route->platform)
+                    ->complete($route->apiKey, $nextPayloadMessages, $route->modelId, $this->mapOptions($provider, $options, $schema, $tools), $timeout);
+
+                return $this->processCompletionResponse(
+                    data: $nextData,
+                    provider: $provider,
+                    route: $route,
+                    tools: $tools,
+                    schema: $schema,
+                    options: $options,
+                    payloadMessages: $nextPayloadMessages,
+                    steps: $steps,
+                    responseMessages: $responseMessages,
+                    timeout: $timeout,
+                );
+            }
+        }
+
+        $combinedUsage = $this->combineUsage($steps);
+        $allToolCalls = $steps->flatMap(fn (Step $step): array => $step->toolCalls);
+        $allToolResults = $steps->flatMap(fn (Step $step): array => $step->toolResults);
+
+        if ($schema !== null && $schema !== []) {
+            $structuredData = json_decode($text, true);
+
+            return (new StructuredTextResponse(
+                is_array($structuredData) ? $structuredData : [],
+                $text,
+                $combinedUsage,
+                $meta,
+            ))->withToolCallsAndResults(
+                toolCalls: $allToolCalls,
+                toolResults: $allToolResults,
+            )->withSteps($steps);
+        }
+
+        return (new TextResponse(
+            $text,
+            $combinedUsage,
+            $meta,
+        ))->withMessages($responseMessages)->withSteps($steps);
+    }
+
+    /**
+     * @param  array<int, ToolCall>  $toolCalls
+     * @param  array<int, Tool>  $tools
+     * @return array<int, ToolResult>
+     */
+    private function executeToolCalls(array $toolCalls, array $tools): array
+    {
+        $results = [];
+
+        foreach ($toolCalls as $toolCall) {
+            $tool = $this->findTool($toolCall->name, $tools);
+
+            if (! $tool instanceof Tool) {
+                continue;
+            }
+
+            $results[] = new ToolResult(
+                $toolCall->id,
+                $toolCall->name,
+                $toolCall->arguments,
+                $this->executeTool($tool, $toolCall->arguments),
+                $toolCall->resultId,
+            );
+        }
+
+        return $results;
+    }
+
+    /** @param array<int, Tool> $tools */
+    private function maxToolSteps(array $tools, ?TextGenerationOptions $options): int
+    {
+        if ($options instanceof TextGenerationOptions && $options->maxSteps !== null) {
+            return $options->maxSteps;
+        }
+
+        return max(1, (int) ceil(count($tools) * 1.5));
+    }
+
+    /**
+     * @param  array<int, Tool>  $tools
+     * @return array<int, array<string, mixed>>
+     */
+    private function mapTools(array $tools): array
+    {
+        $mapped = [];
+
+        foreach ($tools as $tool) {
+            if ($tool instanceof ProviderTool) {
+                throw new LogicException('AI Dev API does not support provider-native tools yet.');
+            }
+
+            if ($tool instanceof Tool) {
+                $mapped[] = $this->mapTool($tool);
+            }
+        }
+
+        return $mapped;
+    }
+
+    /** @return array<string, mixed> */
+    private function mapTool(Tool $tool): array
+    {
+        $schemaArray = (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toSchema();
+
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => ToolNameResolver::resolve($tool),
+                'description' => (string) $tool->description(),
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => $schemaArray['properties'] ?? (object) [],
+                    'required' => $schemaArray['required'] ?? [],
+                    'additionalProperties' => false,
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, ToolCall>
+     */
+    private function toolCallsFromResponse(array $data): array
+    {
+        $rawToolCalls = data_get($data, 'choices.0.message.tool_calls', []);
+
+        if (! is_array($rawToolCalls)) {
+            return [];
+        }
+
+        return collect($rawToolCalls)
+            ->filter(fn (mixed $toolCall): bool => is_array($toolCall))
+            ->map(fn (array $toolCall): ToolCall => new ToolCall(
+                (string) ($toolCall['id'] ?? ''),
+                (string) data_get($toolCall, 'function.name', ''),
+                $this->decodeToolArguments((string) data_get($toolCall, 'function.arguments', '{}')),
+                (string) ($toolCall['id'] ?? ''),
+            ))
+            ->values()
+            ->all();
+    }
+
+    /** @return array<string, mixed> */
+    private function decodeToolArguments(string $arguments): array
+    {
+        $decoded = json_decode($arguments, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /** @return array<string, mixed> */
+    private function assistantMessagePayload(AssistantMessage $message): array
+    {
+        $payload = ['role' => 'assistant'];
+
+        if ($message->content !== '') {
+            $payload['content'] = $message->content;
+        }
+
+        if ($message->toolCalls->isNotEmpty()) {
+            $payload['tool_calls'] = $message->toolCalls
+                ->map(fn (ToolCall $toolCall): array => $this->serializeToolCall($toolCall))
+                ->all();
+        }
+
+        return $payload;
+    }
+
+    /** @return array<string, mixed> */
+    private function serializeToolCall(ToolCall $toolCall): array
+    {
+        return [
+            'id' => $toolCall->resultId ?? $toolCall->id,
+            'type' => 'function',
+            'function' => [
+                'name' => $toolCall->name,
+                'arguments' => json_encode($toolCall->arguments ?: (object) []),
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<int, ToolResult>  $toolResults
+     * @return array<int, array<string, mixed>>
+     */
+    private function toolResultPayloads(array $toolResults): array
+    {
+        return array_map(fn (ToolResult $toolResult): array => [
+            'role' => 'tool',
+            'tool_call_id' => $toolResult->resultId ?? $toolResult->id,
+            'content' => $this->serializeToolResultOutput($toolResult->result),
+        ], $toolResults);
+    }
+
+    private function serializeToolResultOutput(mixed $output): string
+    {
+        if (is_string($output)) {
+            return $output;
+        }
+
+        return is_array($output) ? (string) json_encode($output) : (string) $output;
+    }
+
+    /** @param array<string, mixed> $data */
+    private function usageFromResponse(array $data): Usage
+    {
+        return new Usage(
+            (int) data_get($data, 'usage.prompt_tokens', 0),
+            (int) data_get($data, 'usage.completion_tokens', 0),
+        );
+    }
+
+    /** @param Collection<int, Step> $steps */
+    private function combineUsage(Collection $steps): Usage
+    {
+        return $steps->reduce(
+            fn (Usage $carry, Step $step): Usage => $carry->add($step->usage),
+            new Usage(0, 0),
+        );
+    }
+
+    /** @param array<string, mixed> $data */
+    private function finishReasonFromResponse(array $data): FinishReason
+    {
+        return match ((string) data_get($data, 'choices.0.finish_reason', '')) {
+            'stop' => FinishReason::Stop,
+            'tool_calls' => FinishReason::ToolCalls,
+            'length' => FinishReason::Length,
+            'content_filter' => FinishReason::ContentFilter,
+            default => FinishReason::Unknown,
+        };
     }
 
     private function maxOutputTokens(?TextGenerationOptions $options): int
@@ -348,6 +680,11 @@ final class AiDevApiTextGateway implements Gateway
     private function providerDriver(TextProvider $provider): string
     {
         return $provider instanceof BaseProvider ? $provider->driver() : 'ai-dev-api';
+    }
+
+    private function providerName(TextProvider $provider): string
+    {
+        return $provider instanceof BaseProvider ? $provider->name() : $this->providerDriver($provider);
     }
 
     /** @param array<int, array<string, mixed>> $messages */
@@ -428,14 +765,56 @@ final class AiDevApiTextGateway implements Gateway
             return 'auth';
         }
 
+        if ($exception instanceof ConnectionException) {
+            return 'timeout';
+        }
+
+        $code = (int) $exception->getCode();
+
+        if (in_array($code, [401, 403], true)) {
+            return 'auth';
+        }
+
+        if ($code === 402) {
+            return 'insufficient_credits';
+        }
+
+        if ($code === 429) {
+            return 'rate_limit';
+        }
+
+        if (in_array($code, [500, 502, 503, 504, 529], true)) {
+            return 'server';
+        }
+
         $message = strtolower($exception->getMessage());
 
         return match (true) {
-            str_contains($message, '429'), str_contains($message, 'rate limit'), str_contains($message, 'too many'), str_contains($message, 'quota') => 'rate_limit',
             str_contains($message, '401'), str_contains($message, '403'), str_contains($message, 'auth'), str_contains($message, 'invalid key') => 'auth',
-            str_contains($message, 'timeout'), str_contains($message, 'aborted'), str_contains($message, 'econn') => 'timeout',
-            str_contains($message, '500'), str_contains($message, '503'), str_contains($message, 'unavailable') => 'server',
+            str_contains($message, '402'), str_contains($message, 'payment required'), str_contains($message, 'insufficient'), str_contains($message, 'credit'), str_contains($message, 'balance'), str_contains($message, 'quota') => 'insufficient_credits',
+            str_contains($message, '429'), str_contains($message, 'rate limit'), str_contains($message, 'too many') => 'rate_limit',
+            str_contains($message, 'timeout'), str_contains($message, 'timed out'), str_contains($message, 'aborted'), str_contains($message, 'econn') => 'timeout',
+            str_contains($message, '500'), str_contains($message, '502'), str_contains($message, '503'), str_contains($message, '504'), str_contains($message, '529'), str_contains($message, 'unavailable'), str_contains($message, 'overload'), str_contains($message, 'capacity') => 'server',
             default => 'unknown',
+        };
+    }
+
+    private function shouldCooldownRoute(string $category): bool
+    {
+        return in_array($category, ['rate_limit', 'insufficient_credits', 'timeout', 'server'], true);
+    }
+
+    private function mapExceptionForSdk(Throwable $exception, TextProvider $provider, string $category): Throwable
+    {
+        if ($exception instanceof RateLimitedException || $exception instanceof InsufficientCreditsException || $exception instanceof ProviderOverloadedException) {
+            return $exception;
+        }
+
+        return match ($category) {
+            'rate_limit' => RateLimitedException::forProvider($this->providerName($provider), (int) $exception->getCode(), $exception),
+            'insufficient_credits' => InsufficientCreditsException::forProvider($this->providerName($provider), (int) $exception->getCode(), $exception),
+            'timeout', 'server' => ProviderOverloadedException::forProvider($this->providerName($provider), (int) $exception->getCode(), $exception),
+            default => $exception,
         };
     }
 }

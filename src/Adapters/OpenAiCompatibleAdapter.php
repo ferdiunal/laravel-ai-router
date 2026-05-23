@@ -37,9 +37,9 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         return $this->name;
     }
 
-    public function complete(string $apiKey, array $messages, string $modelId, array $options = []): array
+    public function complete(string $apiKey, array $messages, string $modelId, array $options = [], ?int $timeout = null): array
     {
-        $response = Http::timeout($this->timeoutSeconds())
+        $response = Http::timeout($this->timeoutSeconds($timeout))
             ->withToken($apiKey)
             ->withHeaders($this->extraHeaders)
             ->acceptJson()
@@ -129,7 +129,7 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
             throw new ProviderAuthenticationException($this->name, $response->status(), $message);
         }
 
-        throw new RuntimeException("{$this->name} {$context} {$response->status()}: {$message}");
+        throw new RuntimeException("{$this->name} {$context} {$response->status()}: {$message}", $response->status());
     }
 
     /**

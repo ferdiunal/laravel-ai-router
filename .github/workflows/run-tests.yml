@@ -8,6 +8,9 @@ on:
       - 'phpunit.xml.dist'
       - 'composer.json'
       - 'composer.lock'
+      - 'phpstan.neon.dist'
+      - 'config/**'
+      - 'database/**'
   pull_request:
     paths:
       - '**.php'
@@ -15,6 +18,13 @@ on:
       - 'phpunit.xml.dist'
       - 'composer.json'
       - 'composer.lock'
+      - 'phpstan.neon.dist'
+      - 'config/**'
+      - 'database/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -51,5 +61,5 @@ jobs:
       - name: List Installed Dependencies
         run: composer show -D
 
-      - name: Execute tests
-        run: vendor/bin/phpunit
+      - name: Execute quality gates
+        run: composer ci

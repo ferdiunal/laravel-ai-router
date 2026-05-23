@@ -29,5 +29,6 @@ phpunit.xml
 phpstan.neon
 psalm.xml
 testbench.yaml
+/.hermes
 /docs
 /coverage

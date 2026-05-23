@@ -2,7 +2,7 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-05-23
 
 - Added the `laravel-ai-router` Laravel AI SDK text provider and driver registration with default `auto` model routing.
 - Added provider API-key management commands using Laravel Prompts, encrypted key storage, masked output, provider labels, enable/disable/remove flows, and placeholder-key support for anonymous providers.

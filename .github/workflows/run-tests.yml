@@ -56,7 +56,15 @@ jobs:
           echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
 
       - name: Configure Composer GitHub token
-        run: composer config --global github-oauth.github.com "${{ github.token }}"
+        shell: bash
+        env:
+          COMPOSER_GITHUB_TOKEN: ${{ secrets.COMPOSER_GITHUB_TOKEN }}
+        run: |
+          if [ -n "$COMPOSER_GITHUB_TOKEN" ]; then
+            composer config --global github-oauth.github.com "$COMPOSER_GITHUB_TOKEN"
+          else
+            echo "No COMPOSER_GITHUB_TOKEN secret configured; using unauthenticated public GitHub downloads."
+          fi
 
       - name: Install dependencies
         run: composer update --${{ matrix.stability }} --prefer-dist --no-interaction

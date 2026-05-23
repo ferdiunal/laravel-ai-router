@@ -1,6 +1,9 @@
 # Path-based git attributes
 # https://www.kernel.org/pub/software/scm/git/docs/gitattributes.html
 
+# Keep checkouts platform-neutral so Pint line-ending checks pass on Windows.
+* text=auto eol=lf
+
 # Ignore all test and documentation with "export-ignore".
 /.github export-ignore
 /.gitattributes export-ignore

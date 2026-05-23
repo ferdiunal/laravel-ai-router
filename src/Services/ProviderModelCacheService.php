@@ -16,11 +16,21 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Throwable;
 
+/**
+ * Refreshes, filters, and exposes provider-label-scoped free model cache rows for routing and default model selection.
+ */
 final class ProviderModelCacheService
 {
+    /**
+     * Initialize the cache service with the adapter registry used for live provider model discovery.
+     */
     public function __construct(private readonly ProviderAdapterRegistry $adapters) {}
 
-    /** @return array<int, AiDevApiProviderModelCache> */
+    /**
+     * Refresh the free-model cache for a provider key using live provider data or curated fallback rows when safe.
+     *
+     * @return array<int, AiDevApiProviderModelCache>
+     */
     public function refreshForKey(AiDevApiProviderKey $key): array
     {
         $models = [];
@@ -90,7 +100,11 @@ final class ProviderModelCacheService
         return $rows;
     }
 
-    /** @return array<int, string> */
+    /**
+     * Return cached free model identifiers, optionally scoped by provider and label, with optional auto routing included.
+     *
+     * @return array<int, string>
+     */
     public function modelIds(?string $provider = null, ?string $label = null, bool $includeAuto = true): array
     {
         $ids = [];
@@ -140,6 +154,9 @@ final class ProviderModelCacheService
         return $includeAuto ? array_values(array_unique(['auto', ...$ids])) : array_values(array_unique($ids));
     }
 
+    /**
+     * Return the first enabled routable model identifier from the package catalog.
+     */
     public function firstAvailableModelId(): ?string
     {
         return AiDevApiModel::query()
@@ -150,11 +167,17 @@ final class ProviderModelCacheService
             ->value('model_id');
     }
 
+    /**
+     * Return the preferred quality-oriented model identifier available to the package provider.
+     */
     public function smartestAvailableModelId(): ?string
     {
         return $this->firstAvailableModelId();
     }
 
+    /**
+     * Return the number of currently exposed cached free models for a healthy provider key.
+     */
     public function cachedCountForKey(AiDevApiProviderKey $key): int
     {
         if (! $this->keyCanExposeCachedModels($key)) {
@@ -164,7 +187,11 @@ final class ProviderModelCacheService
         return count($this->cachedModelsForKey($key));
     }
 
-    /** @return array<int, AiDevApiProviderModelCache> */
+    /**
+     * Return filtered cached free model rows for a routable, enabled, non-invalid, non-expired provider key.
+     *
+     * @return array<int, AiDevApiProviderModelCache>
+     */
     public function cachedModelsForKey(AiDevApiProviderKey $key): array
     {
         if (! $this->keyCanExposeCachedModels($key)) {
@@ -186,7 +213,11 @@ final class ProviderModelCacheService
         }
     }
 
-    /** @return array<string, string> */
+    /**
+     * Return searchable model-choice labels for default model selection from a healthy provider key cache.
+     *
+     * @return array<string, string>
+     */
     public function choicesForKey(AiDevApiProviderKey $key, bool $includeAuto = true): array
     {
         $choices = $includeAuto ? ['auto' => 'Auto — route requests across healthy cached free models'] : [];
@@ -207,6 +238,8 @@ final class ProviderModelCacheService
     }
 
     /**
+     * Filter live provider model rows to free candidates and enrich them with curated metadata when available.
+     *
      * @param  array<int, array<string, mixed>>  $liveModels
      * @return array<int, array<string, mixed>>
      */
@@ -235,6 +268,8 @@ final class ProviderModelCacheService
     }
 
     /**
+     * Create runtime model and fallback rows for live custom-provider models that can be routed by the package.
+     *
      * @param  array<int, array<string, mixed>>  $models
      */
     private function ensureRoutableCustomModels(string $platform, array $models, string $source): void
@@ -290,7 +325,11 @@ final class ProviderModelCacheService
         }
     }
 
-    /** @return array<int, array<string, mixed>> */
+    /**
+     * Return curated enabled model metadata for one provider platform.
+     *
+     * @return array<int, array<string, mixed>>
+     */
     private function curatedModels(string $platform): array
     {
         return collect(ModelCatalog::all())
@@ -300,6 +339,9 @@ final class ProviderModelCacheService
             ->all();
     }
 
+    /**
+     * Infer whether a live provider model identifier should be treated as free for cache exposure.
+     */
     private function looksFree(string $platform, string $modelId): bool
     {
         if (str_ends_with($modelId, ':free')) {
@@ -309,6 +351,9 @@ final class ProviderModelCacheService
         return in_array($platform, ['kilo', 'pollinations', 'llm7'], true);
     }
 
+    /**
+     * Persist provider-key invalidation metadata after an authentication failure.
+     */
     private function markKeyInvalid(AiDevApiProviderKey $key): void
     {
         $key->forceFill([
@@ -317,6 +362,9 @@ final class ProviderModelCacheService
         ])->save();
     }
 
+    /**
+     * Determine whether a provider key is allowed to expose cached free models to routing or default selection.
+     */
     private function keyCanExposeCachedModels(AiDevApiProviderKey $key): bool
     {
         if (! in_array($key->platform, $this->routablePlatforms(), true)) {
@@ -330,6 +378,9 @@ final class ProviderModelCacheService
         return $key->models_cache_expires_at === null || ! $key->models_cache_expires_at->isPast();
     }
 
+    /**
+     * Disable existing model cache rows for a provider key before writing a refreshed cache set.
+     */
     private function disableCacheRows(AiDevApiProviderKey $key): void
     {
         AiDevApiProviderModelCache::query()
@@ -337,7 +388,11 @@ final class ProviderModelCacheService
             ->update(['enabled' => false]);
     }
 
-    /** @return array<int, string> */
+    /**
+     * Return provider platforms that have registered adapter implementations.
+     *
+     * @return array<int, string>
+     */
     private function routablePlatforms(): array
     {
         return collect(ProviderCatalog::all())

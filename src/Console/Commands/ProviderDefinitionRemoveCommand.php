@@ -11,6 +11,9 @@ use Illuminate\Console\Command;
 use function Laravel\Prompts\info;
 use function Laravel\Prompts\warning;
 
+/**
+ * Removes a runtime custom provider definition and disables its related routing artifacts.
+ */
 final class ProviderDefinitionRemoveCommand extends Command
 {
     use InteractsWithProviderPrompts;
@@ -19,6 +22,9 @@ final class ProviderDefinitionRemoveCommand extends Command
 
     protected $description = 'Remove a custom provider definition selected by slug.';
 
+    /**
+     * Prompt for a runtime provider definition and remove it while deactivating associated runtime artifacts.
+     */
     public function handle(ProviderDefinitionManager $definitions): int
     {
         $definition = $this->definitionPrompt('Which custom provider definition should be removed?');

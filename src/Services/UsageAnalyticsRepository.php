@@ -7,9 +7,16 @@ namespace Ferdiunal\AiDevApi\Services;
 use Ferdiunal\AiDevApi\Models\AiDevApiRequest;
 use Illuminate\Support\Collection;
 
+/**
+ * Builds usage analytics summaries from package-owned request rows.
+ */
 final class UsageAnalyticsRepository
 {
-    /** @return array<string, mixed> */
+    /**
+     * Return aggregate usage totals for requests recorded after the configured cutoff.
+     *
+     * @return array<string, mixed>
+     */
     public function summary(string $range = '7d'): array
     {
         $query = AiDevApiRequest::query()->where('created_at', '>=', $this->since($range));
@@ -30,7 +37,11 @@ final class UsageAnalyticsRepository
         ];
     }
 
-    /** @return Collection<int, \stdClass> */
+    /**
+     * Return usage aggregates grouped by provider platform and label.
+     *
+     * @return Collection<int, \stdClass>
+     */
     public function byProvider(string $range = '7d'): Collection
     {
         return AiDevApiRequest::query()
@@ -42,7 +53,11 @@ final class UsageAnalyticsRepository
             ->get();
     }
 
-    /** @return Collection<int, \stdClass> */
+    /**
+     * Return usage aggregates grouped by model identifier.
+     *
+     * @return Collection<int, \stdClass>
+     */
     public function byModel(string $range = '7d'): Collection
     {
         return AiDevApiRequest::query()
@@ -54,7 +69,11 @@ final class UsageAnalyticsRepository
             ->get();
     }
 
-    /** @return Collection<int, \stdClass> */
+    /**
+     * Return usage error aggregates grouped by error category.
+     *
+     * @return Collection<int, \stdClass>
+     */
     public function errors(string $range = '7d'): Collection
     {
         return AiDevApiRequest::query()
@@ -67,6 +86,9 @@ final class UsageAnalyticsRepository
             ->get();
     }
 
+    /**
+     * Resolve the analytics lower-bound timestamp from the configured lookback period.
+     */
     private function since(string $range): \DateTimeInterface
     {
         return match ($range) {

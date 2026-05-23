@@ -12,12 +12,18 @@ use Laravel\Ai\Providers\Concerns\HasTextGateway;
 use Laravel\Ai\Providers\Concerns\StreamsText;
 use Laravel\Ai\Providers\Provider;
 
+/**
+ * Registers AI Dev API as a Laravel AI text provider facade backed by the package text gateway and model cache.
+ */
 final class AiDevApiProvider extends Provider implements TextProvider
 {
     use GeneratesText;
     use HasTextGateway;
     use StreamsText;
 
+    /**
+     * Return the configured default text model after applying the persisted package preference fallback.
+     */
     public function defaultTextModel(): string
     {
         $fallback = (string) data_get($this->config, 'models.text.default', config('ai-dev-api.models.text.default', 'auto'));
@@ -25,11 +31,17 @@ final class AiDevApiProvider extends Provider implements TextProvider
         return app(ModelPreferenceManager::class)->defaultTextModel($fallback);
     }
 
+    /**
+     * Return the first enabled routable text model for Laravel AI's cheapest-model contract.
+     */
     public function cheapestTextModel(): string
     {
         return app(ProviderModelCacheService::class)->firstAvailableModelId() ?? $this->defaultTextModel();
     }
 
+    /**
+     * Return the preferred enabled routable text model for Laravel AI's smartest-model contract.
+     */
     public function smartestTextModel(): string
     {
         return app(ProviderModelCacheService::class)->smartestAvailableModelId() ?? $this->defaultTextModel();

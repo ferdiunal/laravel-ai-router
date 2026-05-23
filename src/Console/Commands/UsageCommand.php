@@ -10,12 +10,18 @@ use Illuminate\Console\Command;
 use function Laravel\Prompts\select;
 use function Laravel\Prompts\table;
 
+/**
+ * Displays package usage analytics summary tables grouped by provider label and model.
+ */
 final class UsageCommand extends Command
 {
     protected $signature = 'ai-dev-api:usage';
 
     protected $description = 'Show AI Dev API usage statistics.';
 
+    /**
+     * Render the selected usage range as summary, provider-label, and model aggregate tables.
+     */
     public function handle(UsageAnalyticsRepository $analytics): int
     {
         $range = $this->input->isInteractive()

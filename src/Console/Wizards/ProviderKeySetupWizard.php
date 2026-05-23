@@ -17,14 +17,23 @@ use function Laravel\Prompts\search;
 use function Laravel\Prompts\text;
 use function Laravel\Prompts\warning;
 
+/**
+ * Coordinates the interactive provider key setup flow, including provider selection, key input, label input, model refresh, and default model selection.
+ */
 final class ProviderKeySetupWizard
 {
+    /**
+     * Initialize the wizard with key, model-cache, and default-model preference services.
+     */
     public function __construct(
         private readonly ProviderKeyManager $keys,
         private readonly ProviderModelCacheService $modelCache,
         private readonly ModelPreferenceManager $preferences,
     ) {}
 
+    /**
+     * Run the provider-key setup prompts, persist the key, refresh models, and store the selected default model.
+     */
     public function run(bool $interactive): AiDevApiProviderKey
     {
         $platform = $this->providerPrompt($interactive);
@@ -51,6 +60,9 @@ final class ProviderKeySetupWizard
         return $key;
     }
 
+    /**
+     * Render a searchable provider prompt restricted to routable provider definitions.
+     */
     private function providerPrompt(bool $interactive): string
     {
         $options = collect(ProviderCatalog::all())
@@ -72,17 +84,27 @@ final class ProviderKeySetupWizard
         );
     }
 
+    /**
+     * Prompt for a provider API key while keeping the raw credential out of command output.
+     */
     private function apiKeyPrompt(bool $interactive, string $default): string
     {
         return $interactive ? password('API key', required: true) : $default;
     }
 
+    /**
+     * Prompt for the provider-key label used to scope cache and routing rows.
+     */
     private function labelPrompt(bool $interactive): string
     {
         return $interactive ? text('Label', default: 'Primary', required: true) : 'Primary';
     }
 
-    /** @param array<string, string> $options */
+    /**
+     * Render a searchable model prompt over cached model choices and return the selected model identifier.
+     *
+     * @param  array<string, string>  $options
+     */
     private function modelPrompt(bool $interactive, array $options): string
     {
         $options = $options !== [] ? $options : ['auto' => 'Auto — route requests across healthy cached free models'];

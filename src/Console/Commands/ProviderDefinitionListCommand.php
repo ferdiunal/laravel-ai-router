@@ -9,12 +9,18 @@ use Illuminate\Console\Command;
 
 use function Laravel\Prompts\table;
 
+/**
+ * Lists runtime custom provider definitions with status and connection metadata.
+ */
 final class ProviderDefinitionListCommand extends Command
 {
     protected $signature = 'ai-dev-api:provider-definition:list';
 
     protected $description = 'List custom OpenAI-compatible provider definitions.';
 
+    /**
+     * Render runtime custom provider definitions with adapter, endpoint, status, and timeout metadata.
+     */
     public function handle(): int
     {
         $rows = AiDevApiProviderDefinition::query()->orderBy('platform')->get()

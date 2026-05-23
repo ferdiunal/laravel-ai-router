@@ -22,8 +22,14 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Ai\AiManager;
 
+/**
+ * Bootstraps the package configuration, Artisan commands, Laravel AI driver extension, and dedicated package database connection.
+ */
 final class AiDevApiServiceProvider extends ServiceProvider
 {
+    /**
+     * Register package configuration, services, and Laravel AI provider bindings in the application container.
+     */
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/ai-dev-api.php', 'ai-dev-api');
@@ -43,6 +49,9 @@ final class AiDevApiServiceProvider extends ServiceProvider
         });
     }
 
+    /**
+     * Publish package configuration and register console-only package commands during application boot.
+     */
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
@@ -68,6 +77,9 @@ final class AiDevApiServiceProvider extends ServiceProvider
         }
     }
 
+    /**
+     * Normalize package database configuration before registering the dedicated package connection.
+     */
     private function normalizeDatabaseConfig(): void
     {
         if (! config('ai-dev-api.database.connection')) {
@@ -79,6 +91,9 @@ final class AiDevApiServiceProvider extends ServiceProvider
         }
     }
 
+    /**
+     * Register the dedicated package database connection without overriding host application connections.
+     */
     private function registerAiDevApiDatabaseConnection(): void
     {
         $connection = (string) (config('ai-dev-api.database.connection') ?: 'ai-dev-api');

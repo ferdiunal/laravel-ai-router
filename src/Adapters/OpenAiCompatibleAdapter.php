@@ -14,9 +14,16 @@ use Illuminate\Support\Facades\Http;
 use Psr\Http\Message\StreamInterface;
 use RuntimeException;
 
+/**
+ * Implements the ProviderAdapter contract for OpenAI-compatible HTTP APIs with bounded request, response, and SSE parsing behavior.
+ */
 final class OpenAiCompatibleAdapter implements ProviderAdapter
 {
-    /** @param array<string, string> $extraHeaders */
+    /**
+     * Initialize the adapter with provider metadata and sanitized extra headers.
+     *
+     * @param  array<string, string>  $extraHeaders
+     */
     public function __construct(
         private readonly string $platform,
         private readonly string $name,
@@ -29,16 +36,25 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         private readonly int $maxStreamEventBytes = 1_048_576,
     ) {}
 
+    /**
+     * Return the provider platform slug represented by this adapter.
+     */
     public function platform(): string
     {
         return $this->platform;
     }
 
+    /**
+     * Return the human-readable provider name represented by this adapter.
+     */
     public function name(): string
     {
         return $this->name;
     }
 
+    /**
+     * Send a non-streaming text completion request to the upstream provider and return the normalized response payload.
+     */
     public function complete(string $apiKey, array $messages, string $modelId, array $options = [], ?int $timeout = null): array
     {
         $url = $this->endpoint('chat/completions');
@@ -59,6 +75,9 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         return $data;
     }
 
+    /**
+     * Open a streaming text completion request and yield decoded provider chunks within configured buffer limits.
+     */
     public function stream(string $apiKey, array $messages, string $modelId, array $options = [], ?int $timeout = null): Generator
     {
         $url = $this->endpoint('chat/completions');
@@ -75,6 +94,9 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         yield from $this->parseServerSentEvents($response->toPsrResponse()->getBody());
     }
 
+    /**
+     * Fetch free model candidates from the upstream OpenAI-compatible models endpoint.
+     */
     public function models(string $apiKey): array
     {
         $url = $this->endpoint('models');
@@ -103,6 +125,9 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
             ->all();
     }
 
+    /**
+     * Validate provider credentials without exposing the raw key in output or persisted errors.
+     */
     public function validateKey(string $apiKey): bool
     {
         $url = $this->validationEndpoint();
@@ -116,6 +141,9 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         return ! in_array($response->status(), [401, 403], true);
     }
 
+    /**
+     * Build an absolute OpenAI-compatible endpoint URL from the configured base URL and request path.
+     */
     private function endpoint(string $path): string
     {
         $baseUrl = $this->enforcePublicBaseUrl
@@ -125,6 +153,9 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         return rtrim($baseUrl, '/').'/'.ltrim($path, '/');
     }
 
+    /**
+     * Resolve the credential-validation URL, falling back to the provider models endpoint when no override is configured.
+     */
     private function validationEndpoint(): string
     {
         if ($this->validateUrl === null) {
@@ -138,6 +169,9 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         return $this->validatedPublicUrl($this->validateUrl, 'validation');
     }
 
+    /**
+     * Normalize and enforce public-HTTPS DNS validation for custom provider request URLs.
+     */
     private function validatedPublicUrl(string $url, string $kind): string
     {
         $validatedUrl = ProviderDefinitionValidator::normalizeBaseUrl($url, requirePublicDns: true);
@@ -149,7 +183,11 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         return $validatedUrl;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Build the HTTP client options used for an upstream OpenAI-compatible request.
+     *
+     * @return array<string, mixed>
+     */
     private function requestOptions(string $url): array
     {
         $options = ['allow_redirects' => false];
@@ -176,6 +214,9 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         return $options;
     }
 
+    /**
+     * Determine whether the request URL already targets a literal IP address instead of a DNS hostname.
+     */
     private function urlHostIsIpAddress(string $url): bool
     {
         $host = parse_url($url, PHP_URL_HOST);
@@ -183,7 +224,11 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         return is_string($host) && filter_var($host, FILTER_VALIDATE_IP) !== false;
     }
 
-    /** @return list<string> */
+    /**
+     * Build cURL DNS pinning entries from previously validated public provider IP addresses.
+     *
+     * @return list<string>
+     */
     private function curlResolveEntries(string $url): array
     {
         $host = parse_url($url, PHP_URL_HOST);
@@ -204,7 +249,11 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
             ->all();
     }
 
-    /** @return array<string, string> */
+    /**
+     * Return custom provider metadata headers after removing names that could override package authentication.
+     *
+     * @return array<string, string>
+     */
     private function safeExtraHeaders(): array
     {
         $headers = [];
@@ -222,6 +271,9 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         return $headers;
     }
 
+    /**
+     * Resolve the HTTP timeout in seconds from the per-request override or the adapter default.
+     */
     private function timeoutSeconds(?int $timeout = null): float
     {
         if ($timeout !== null) {
@@ -231,6 +283,9 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         return max(1, $this->timeoutMs / 1000);
     }
 
+    /**
+     * Convert unsuccessful upstream HTTP responses into authentication-specific or generic provider exceptions.
+     */
     private function throwIfUnsuccessful(Response $response, string $context): void
     {
         if ($response->successful()) {
@@ -247,6 +302,8 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
     }
 
     /**
+     * Build the OpenAI-compatible chat completion payload for non-streaming requests.
+     *
      * @param  array<int, array<string, mixed>>  $messages
      * @param  array<string, mixed>  $options
      * @return array<string, mixed>
@@ -267,6 +324,8 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
     }
 
     /**
+     * Build the OpenAI-compatible streaming payload with usage reporting enabled.
+     *
      * @param  array<int, array<string, mixed>>  $messages
      * @param  array<string, mixed>  $options
      * @return array<string, mixed>
@@ -280,7 +339,11 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         ];
     }
 
-    /** @return Generator<int, array<string, mixed>> */
+    /**
+     * Parse OpenAI-compatible SSE lines into decoded event payloads while enforcing aggregate byte limits.
+     *
+     * @return Generator<int, array<string, mixed>>
+     */
     private function parseServerSentEvents(StreamInterface $streamBody): Generator
     {
         $dataLines = [];
@@ -327,6 +390,8 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
     }
 
     /**
+     * Decode accumulated SSE data lines into a provider chunk, done sentinel, or ignored malformed event.
+     *
      * @param  array<int, string>  $dataLines
      * @return array<string, mixed>|'__done__'|null
      */
@@ -347,6 +412,9 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         return json_last_error() === JSON_ERROR_NONE && is_array($decoded) ? $decoded : null;
     }
 
+    /**
+     * Read one SSE line from the provider stream while enforcing the configured line byte limit.
+     */
     private function readLine(StreamInterface $streamBody): string
     {
         $buffer = '';
@@ -373,6 +441,8 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
     }
 
     /**
+     * Normalize provider choice message content so Laravel AI receives a string when possible.
+     *
      * @param  array<string, mixed>  $data
      */
     private function normalizeChoices(array &$data): void

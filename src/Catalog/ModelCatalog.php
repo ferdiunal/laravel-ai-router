@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace Ferdiunal\AiDevApi\Catalog;
 
+/**
+ * Provides the curated built-in model catalog used for fallback routing and model cache enrichment.
+ */
 final class ModelCatalog
 {
     /**
+     * Return the curated built-in model catalog rows used to seed package routing metadata.
+     *
      * @return array<int, array<string, mixed>>
      */
     public static function all(): array
@@ -31,6 +36,8 @@ final class ModelCatalog
     }
 
     /**
+     * Return the catalog row for the requested model identifier when it is known.
+     *
      * @return array<string, mixed>
      */
     private static function model(

@@ -13,23 +13,38 @@ use function Laravel\Prompts\password;
 use function Laravel\Prompts\search;
 use function Laravel\Prompts\text;
 
+/**
+ * Provides Laravel Prompts helpers shared by provider and custom-provider Artisan commands.
+ */
 trait InteractsWithProviderPrompts
 {
+    /**
+     * Render a confirmation prompt when interactive input is available, otherwise return the deterministic default.
+     */
     protected function confirmPrompt(string $label, bool $default = true): bool
     {
         return $this->shouldPrompt() ? confirm($label, default: $default) : $default;
     }
 
+    /**
+     * Render a text prompt when interactive input is available, otherwise return the deterministic default.
+     */
     protected function textPrompt(string $label, string $default = '', bool|string $required = false): string
     {
         return $this->shouldPrompt() ? text($label, default: $default, required: $required) : $default;
     }
 
+    /**
+     * Render a hidden input prompt for provider credentials without echoing the raw key.
+     */
     protected function passwordPrompt(string $label, string $default = ''): string
     {
         return $this->shouldPrompt() ? password($label, required: true) : $default;
     }
 
+    /**
+     * Render a searchable provider prompt restricted to routable provider definitions.
+     */
     protected function providerPrompt(string $label = 'Provider'): string
     {
         $options = collect(ProviderCatalog::all())
@@ -51,7 +66,11 @@ trait InteractsWithProviderPrompts
         );
     }
 
-    /** @param array<string, string> $options */
+    /**
+     * Render a searchable model prompt over cached model choices and return the selected model identifier.
+     *
+     * @param  array<string, string>  $options
+     */
     protected function modelPrompt(array $options, string $label = 'Which model should be default?', string $default = 'auto'): string
     {
         if ($options === []) {
@@ -76,6 +95,9 @@ trait InteractsWithProviderPrompts
         );
     }
 
+    /**
+     * Render a searchable provider-key prompt using masked credentials only.
+     */
     protected function keyPrompt(string $label = 'Provider key'): ?AiDevApiProviderKey
     {
         $keys = AiDevApiProviderKey::query()->orderBy('platform')->orderBy('label')->get();
@@ -100,6 +122,9 @@ trait InteractsWithProviderPrompts
         return $keys->firstWhere('id', (int) $selected);
     }
 
+    /**
+     * Render a searchable custom-provider definition prompt for runtime definition commands.
+     */
     protected function definitionPrompt(string $label = 'Custom provider definition'): ?AiDevApiProviderDefinition
     {
         $definitions = AiDevApiProviderDefinition::query()->orderBy('platform')->get();
@@ -124,6 +149,9 @@ trait InteractsWithProviderPrompts
         return $definitions->firstWhere('id', (int) $selected);
     }
 
+    /**
+     * Determine whether Laravel Prompts should be used for the current console execution context.
+     */
     protected function shouldPrompt(): bool
     {
         return $this->input->isInteractive() && ! app()->runningUnitTests();

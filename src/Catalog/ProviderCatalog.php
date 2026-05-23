@@ -10,9 +10,14 @@ use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use Throwable;
 
+/**
+ * Builds the provider catalog from built-in providers, config-defined custom providers, and runtime database definitions.
+ */
 final class ProviderCatalog
 {
     /**
+     * Return the complete catalog map after applying built-in and runtime sources.
+     *
      * @return array<string, array<string, mixed>>
      */
     public static function all(): array
@@ -28,6 +33,8 @@ final class ProviderCatalog
     }
 
     /**
+     * Return the built-in provider catalog definitions shipped with the package.
+     *
      * @return array<string, array<string, mixed>>
      */
     public static function builtIn(): array
@@ -70,6 +77,8 @@ final class ProviderCatalog
     }
 
     /**
+     * Return a single provider catalog definition or fail when the platform is unknown.
+     *
      * @return array<string, mixed>
      */
     public static function get(string $platform): array
@@ -78,6 +87,8 @@ final class ProviderCatalog
     }
 
     /**
+     * Read config-defined custom OpenAI-compatible provider definitions and normalize their metadata.
+     *
      * @return array<string, array<string, mixed>>
      */
     private static function customFromConfig(): array
@@ -103,6 +114,8 @@ final class ProviderCatalog
     }
 
     /**
+     * Read enabled runtime custom provider definitions from package storage.
+     *
      * @return array<string, array<string, mixed>>
      */
     private static function customFromDatabase(): array
@@ -135,6 +148,8 @@ final class ProviderCatalog
     }
 
     /**
+     * Build a normalized OpenAI-compatible provider definition for catalog use.
+     *
      * @return array<string, mixed>
      */
     private static function openAiCompatible(

@@ -10,8 +10,14 @@ use Ferdiunal\AiDevApi\Support\ProviderDefinitionValidator;
 use InvalidArgumentException;
 use RuntimeException;
 
+/**
+ * Resolves routable provider adapters and provider-specific metadata from the current provider catalog.
+ */
 final class ProviderAdapterRegistry
 {
+    /**
+     * Determine whether the provider platform has a routable adapter implementation.
+     */
     public function has(string $platform): bool
     {
         try {
@@ -23,6 +29,9 @@ final class ProviderAdapterRegistry
         return in_array($definition['adapter'] ?? null, ['openai-compatible', 'cohere'], true);
     }
 
+    /**
+     * Resolve the adapter instance for a routable provider platform.
+     */
     public function for(string $platform): ProviderAdapter
     {
         $definition = ProviderCatalog::get($platform);
@@ -44,6 +53,8 @@ final class ProviderAdapterRegistry
     }
 
     /**
+     * Return sanitized provider-specific headers that are safe to send with upstream requests.
+     *
      * @param  array<string, mixed>  $definition
      * @return array<string, string>
      */

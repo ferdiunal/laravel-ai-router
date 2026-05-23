@@ -8,10 +8,16 @@ use Ferdiunal\AiDevApi\Models\AiDevApiSetting;
 use Illuminate\Database\QueryException;
 use Throwable;
 
+/**
+ * Reads and writes the package-level default text model preference stored in internal package storage.
+ */
 final class ModelPreferenceManager
 {
     public const DEFAULT_TEXT_MODEL_KEY = 'default_text_model_id';
 
+    /**
+     * Return the configured default text model after applying the persisted package preference fallback.
+     */
     public function defaultTextModel(string $fallback = 'auto'): string
     {
         try {
@@ -27,6 +33,9 @@ final class ModelPreferenceManager
         return is_string($modelId) && trim($modelId) !== '' ? $modelId : $fallback;
     }
 
+    /**
+     * Persist the selected default text model in package settings without mutating configuration files.
+     */
     public function setDefaultTextModel(string $modelId): void
     {
         $modelId = trim($modelId) !== '' ? trim($modelId) : 'auto';
@@ -37,6 +46,9 @@ final class ModelPreferenceManager
         );
     }
 
+    /**
+     * Remove the persisted default text model preference from package settings.
+     */
     public function clearDefaultTextModel(): void
     {
         AiDevApiSetting::query()->whereKey(self::DEFAULT_TEXT_MODEL_KEY)->delete();

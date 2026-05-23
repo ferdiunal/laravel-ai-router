@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
+ * Represents a provider-label-scoped cache row for a free model discovered from a provider key.
+ *
  * @property int $id
  * @property int $provider_key_id
  * @property string $platform
@@ -35,6 +37,9 @@ final class AiDevApiProviderModelCache extends AiDevApiBaseModel
 
     protected $guarded = [];
 
+    /**
+     * Return Eloquent attribute cast definitions for this model.
+     */
     protected function casts(): array
     {
         return [
@@ -52,7 +57,11 @@ final class AiDevApiProviderModelCache extends AiDevApiBaseModel
         ];
     }
 
-    /** @return BelongsTo<AiDevApiProviderKey, $this> */
+    /**
+     * Define the inverse relationship from a cached model row to its owning provider key.
+     *
+     * @return BelongsTo<AiDevApiProviderKey, $this>
+     */
     public function providerKey(): BelongsTo
     {
         return $this->belongsTo(AiDevApiProviderKey::class, 'provider_key_id');

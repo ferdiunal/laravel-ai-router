@@ -8,28 +8,45 @@ use Carbon\CarbonImmutable;
 use Ferdiunal\AiDevApi\Models\AiDevApiRateWindow;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Persists local request windows, token windows, and cooldown windows for provider/model/key routing decisions.
+ */
 final class RateLimitWindowRepository
 {
-    /** @param array{rpm:?int,rpd:?int,tpm:?int,tpd:?int} $limits */
+    /**
+     * Determine whether request-rate windows allow another request for the provider/model/key tuple.
+     *
+     * @param  array{rpm:?int,rpd:?int,tpm:?int,tpd:?int}  $limits
+     */
     public function canMakeRequest(string $platform, string $modelId, int $keyId, array $limits): bool
     {
         return $this->underRequestLimit($platform, $modelId, $keyId, 'rpm', $limits['rpm'] ?? null)
             && $this->underRequestLimit($platform, $modelId, $keyId, 'rpd', $limits['rpd'] ?? null);
     }
 
-    /** @param array{tpm:?int,tpd:?int} $limits */
+    /**
+     * Determine whether token-rate windows allow the estimated token usage for the provider/model/key tuple.
+     *
+     * @param  array{tpm:?int,tpd:?int}  $limits
+     */
     public function canUseTokens(string $platform, string $modelId, int $keyId, int $estimatedTokens, array $limits): bool
     {
         return $this->underTokenLimit($platform, $modelId, $keyId, 'tpm', $estimatedTokens, $limits['tpm'] ?? null)
             && $this->underTokenLimit($platform, $modelId, $keyId, 'tpd', $estimatedTokens, $limits['tpd'] ?? null);
     }
 
+    /**
+     * Increment the local request window for the provider/model/key tuple.
+     */
     public function recordRequest(string $platform, string $modelId, int $keyId): void
     {
         $this->incrementWindow($platform, $modelId, $keyId, 'rpm', 1, 0);
         $this->incrementWindow($platform, $modelId, $keyId, 'rpd', 1, 0);
     }
 
+    /**
+     * Increment the local token window for the provider/model/key tuple.
+     */
     public function recordTokens(string $platform, string $modelId, int $keyId, int $tokens): void
     {
         if ($tokens <= 0) {
@@ -40,6 +57,9 @@ final class RateLimitWindowRepository
         $this->incrementWindow($platform, $modelId, $keyId, 'tpd', 0, $tokens);
     }
 
+    /**
+     * Persist a cooldown window for the provider/model/key tuple after a retryable failure.
+     */
     public function setCooldown(string $platform, string $modelId, int $keyId, int $seconds): void
     {
         AiDevApiRateWindow::query()->create([
@@ -53,6 +73,9 @@ final class RateLimitWindowRepository
         ]);
     }
 
+    /**
+     * Determine whether the provider/model/key tuple is currently blocked by a cooldown window.
+     */
     public function isOnCooldown(string $platform, string $modelId, int $keyId): bool
     {
         return AiDevApiRateWindow::query()
@@ -64,6 +87,9 @@ final class RateLimitWindowRepository
             ->exists();
     }
 
+    /**
+     * Compare a rate-window row against the configured request limit.
+     */
     private function underRequestLimit(string $platform, string $modelId, int $keyId, string $type, ?int $limit): bool
     {
         if ($limit === null || $limit <= 0) {
@@ -83,6 +109,9 @@ final class RateLimitWindowRepository
         return $used < $limit;
     }
 
+    /**
+     * Compare a rate-window row against the configured token limit.
+     */
     private function underTokenLimit(string $platform, string $modelId, int $keyId, string $type, int $estimatedTokens, ?int $limit): bool
     {
         if ($limit === null || $limit <= 0) {
@@ -102,6 +131,9 @@ final class RateLimitWindowRepository
         return $used + $estimatedTokens <= $limit;
     }
 
+    /**
+     * Create or increment a bounded rate-window row for local routing controls.
+     */
     private function incrementWindow(string $platform, string $modelId, int $keyId, string $type, int $requests, int $tokens): void
     {
         $window = $this->windowBounds($type);
@@ -138,7 +170,11 @@ final class RateLimitWindowRepository
         });
     }
 
-    /** @return array{start: CarbonImmutable, end: CarbonImmutable} */
+    /**
+     * Calculate the active rolling rate-limit window boundaries for the requested window type.
+     *
+     * @return array{start: CarbonImmutable, end: CarbonImmutable}
+     */
     private function windowBounds(string $type): array
     {
         $now = CarbonImmutable::now();

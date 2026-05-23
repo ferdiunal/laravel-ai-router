@@ -11,6 +11,8 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
 
 /**
+ * Represents an encrypted provider API key identified by provider platform and user-defined label.
+ *
  * @property int $id
  * @property string $platform
  * @property string $label
@@ -40,6 +42,9 @@ final class AiDevApiProviderKey extends AiDevApiBaseModel
         'masked_key',
     ];
 
+    /**
+     * Return Eloquent attribute cast definitions for this model.
+     */
     protected function casts(): array
     {
         return [
@@ -51,7 +56,11 @@ final class AiDevApiProviderKey extends AiDevApiBaseModel
         ];
     }
 
-    /** @return Attribute<string|null, string> */
+    /**
+     * Define the encrypted provider API-key accessor and mutator.
+     *
+     * @return Attribute<string|null, string>
+     */
     protected function key(): Attribute
     {
         return Attribute::make(
@@ -60,13 +69,21 @@ final class AiDevApiProviderKey extends AiDevApiBaseModel
         );
     }
 
-    /** @return Attribute<string, never> */
+    /**
+     * Define the read-only masked provider credential accessor for safe CLI and serialization output.
+     *
+     * @return Attribute<string, never>
+     */
     protected function maskedKey(): Attribute
     {
         return Attribute::get(fn (): string => KeyMasker::mask($this->key));
     }
 
-    /** @return HasMany<AiDevApiProviderModelCache, $this> */
+    /**
+     * Define the provider-key relationship to provider-label-scoped cached model rows.
+     *
+     * @return HasMany<AiDevApiProviderModelCache, $this>
+     */
     public function modelCaches(): HasMany
     {
         return $this->hasMany(AiDevApiProviderModelCache::class, 'provider_key_id');

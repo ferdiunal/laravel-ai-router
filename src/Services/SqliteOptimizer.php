@@ -8,6 +8,9 @@ use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
+/**
+ * Applies bounded SQLite PRAGMA settings to package-owned SQLite connections.
+ */
 final class SqliteOptimizer
 {
     private const DEFAULT_BUSY_TIMEOUT_MS = 5000;
@@ -24,7 +27,11 @@ final class SqliteOptimizer
     /** @var array<int, string> */
     private const SYNCHRONOUS_MODES = ['OFF', 'NORMAL', 'FULL', 'EXTRA'];
 
-    /** @return array<int, string> applied pragma statements */
+    /**
+     * Apply configured SQLite PRAGMA optimizations when the target connection uses SQLite.
+     *
+     * @return array<int, string> applied pragma statements
+     */
     public function optimize(?string $connection = null): array
     {
         if (! (bool) config('ai-dev-api.database.sqlite.optimize', true)) {
@@ -59,6 +66,8 @@ final class SqliteOptimizer
     }
 
     /**
+     * Normalize a configured SQLite enum-like value against an allowed set and fallback.
+     *
      * @param  array<int, string>  $allowed
      */
     private function enumValue(mixed $value, array $allowed, string $default): string
@@ -68,12 +77,17 @@ final class SqliteOptimizer
         return in_array($candidate, $allowed, true) ? $candidate : $default;
     }
 
+    /**
+     * Clamp numeric SQLite configuration values to safe minimum and maximum bounds.
+     */
     private function clampInt(mixed $value, int $min, int $max): int
     {
         return min($max, max($min, (int) $value));
     }
 
     /**
+     * Execute a SQLite PRAGMA statement on the target connection with optional value binding.
+     *
      * @param  array<int, string>  $statements
      * @return array<int, string>
      */

@@ -16,6 +16,9 @@ use Illuminate\Support\Facades\Schema;
 use function Laravel\Prompts\info;
 use function Laravel\Prompts\outro;
 
+/**
+ * Runs the package installer that prepares internal storage, migrations, catalog data, SQLite optimization, and optional provider setup.
+ */
 final class InstallCommand extends Command
 {
     use InteractsWithProviderPrompts;
@@ -24,6 +27,9 @@ final class InstallCommand extends Command
 
     protected $description = 'Prepare AI Dev API local storage and optionally add a provider key.';
 
+    /**
+     * Prepare package storage, run internal migrations, seed catalogs, optimize SQLite, and optionally launch setup.
+     */
     public function handle(
         SeedModelCatalog $seedModelCatalog,
         SqliteOptimizer $sqliteOptimizer,
@@ -60,6 +66,9 @@ final class InstallCommand extends Command
         return self::SUCCESS;
     }
 
+    /**
+     * Create the package SQLite database file and parent directory when the dedicated connection targets SQLite storage.
+     */
     private function ensureSqliteDatabaseFile(string $connection): ?string
     {
         if (config("database.connections.{$connection}.driver") !== 'sqlite') {
@@ -83,6 +92,9 @@ final class InstallCommand extends Command
         return $database;
     }
 
+    /**
+     * Execute package-owned internal migrations against the configured package connection.
+     */
     private function runInternalMigrations(string $connection): void
     {
         Artisan::call('migrate', [

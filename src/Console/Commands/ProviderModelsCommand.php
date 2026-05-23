@@ -14,6 +14,9 @@ use function Laravel\Prompts\info;
 use function Laravel\Prompts\table;
 use function Laravel\Prompts\warning;
 
+/**
+ * Lists, refreshes, and selects cached free models for a specific provider key.
+ */
 final class ProviderModelsCommand extends Command
 {
     use InteractsWithProviderPrompts;
@@ -22,6 +25,9 @@ final class ProviderModelsCommand extends Command
 
     protected $description = 'List, refresh, search, and select cached free models for a provider key.';
 
+    /**
+     * Prompt for a provider key, optionally refresh its model cache, list cached models, and update the default model.
+     */
     public function handle(ProviderModelCacheService $modelCache, ModelPreferenceManager $preferences): int
     {
         $key = $this->keyPrompt('Which provider key models should be shown?');

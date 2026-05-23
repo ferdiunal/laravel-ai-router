@@ -7,6 +7,8 @@ namespace Ferdiunal\AiDevApi\Models;
 use Illuminate\Support\Carbon;
 
 /**
+ * Represents a persisted usage analytics row for a routed provider request.
+ *
  * @property int $id
  * @property string|null $request_id
  * @property string $platform
@@ -34,6 +36,9 @@ final class AiDevApiRequest extends AiDevApiBaseModel
 
     protected $guarded = [];
 
+    /**
+     * Return Eloquent attribute cast definitions for this model.
+     */
     protected function casts(): array
     {
         return [

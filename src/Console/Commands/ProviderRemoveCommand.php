@@ -11,6 +11,9 @@ use Illuminate\Console\Command;
 use function Laravel\Prompts\info;
 use function Laravel\Prompts\warning;
 
+/**
+ * Removes an encrypted provider key and prevents it from participating in routing.
+ */
 final class ProviderRemoveCommand extends Command
 {
     use InteractsWithProviderPrompts;
@@ -19,6 +22,9 @@ final class ProviderRemoveCommand extends Command
 
     protected $description = 'Remove a provider key selected by provider and label.';
 
+    /**
+     * Prompt for a provider key and delete the selected provider-label credential row.
+     */
     public function handle(ProviderKeyManager $keys): int
     {
         $key = $this->keyPrompt('Which provider key should be removed?');

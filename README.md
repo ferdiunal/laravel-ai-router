@@ -1,55 +1,65 @@
 # AI Dev API
 
-Laravel AI SDK için provider/key/model routing paketi. Amaç: birden fazla ücretsiz veya düşük maliyetli OpenAI-compatible provider anahtarını Laravel içinde yönetmek, desteklenen free modelleri provider + label bazında cachelemek, `auto` model routing yapmak ve kullanım istatistiklerini lokal veritabanında tutmak.
+English | [Türkçe](README.TR.md)
 
-## Özellikler
+AI Dev API is a Laravel AI SDK text provider that routes prompts through locally managed provider keys, free-model caches, fallback metadata, rate-limit windows, and usage analytics. It is designed for applications that want one Laravel AI provider name (`ai-dev-api`) while using multiple OpenAI-compatible providers and multiple labeled API keys behind a local routing layer.
 
-- Laravel AI driver adı: `ai-dev-api`
-- Varsayılan text model: `auto`
-- Provider API key yönetimi: ekle, sil, listele, aktif/pasif yap
-- Runtime custom OpenAI-compatible provider tanımı: base URL/header/timeout ekle, listele, aktif/pasif yap, sil
-- API key değerleri encrypted saklanır, CLI çıktısında maskelenir
-- Provider + label bazlı free model cache
-- `AiDevApiProvider::models()` ile cachelenmiş model id erişimi
-- Non-streaming ve streaming text gateway desteği
-- Laravel AI structured output desteği (`StructuredTextResponse` / `StructuredAgentResponse`)
-- OpenAI-compatible function tool-call loop desteği (non-stream)
-- Laravel AI failover için retryable hata mapping'i (`RateLimitedException`, `InsufficientCreditsException`, `ProviderOverloadedException`)
-- Request/usage analytics: provider, label, model, token, latency, error category
-- SQLite için config kontrollü WAL/PRAGMA optimizasyonu
-- Laravel Prompts tabanlı interaktif Artisan komutları
+The package stores its own operational state in a dedicated package database connection by default. The default storage target is `database/ai-dev-api.sqlite`, which keeps provider keys, model cache rows, fallback routing rows, rate-limit counters, usage records, runtime custom provider definitions, and package settings out of the host application's main tables.
 
-## Kurulum
+## Features
+
+- Laravel AI driver name: `ai-dev-api`.
+- Default text model: `auto`.
+- Provider API key management: add, list, enable, disable, remove.
+- Runtime custom OpenAI-compatible provider definitions: add, list, enable, disable, remove.
+- Encrypted API-key storage through Laravel encryption.
+- Masked CLI output; raw provider keys are not printed.
+- Provider + label scoped free-model cache.
+- `AiDevApiProvider::models()` access to cached model IDs.
+- Non-streaming text generation through Laravel AI `TextProvider`.
+- Streaming text generation through Laravel AI stream events.
+- Structured output support through Laravel AI structured response types.
+- Non-stream OpenAI-compatible function tool-call loop.
+- Laravel AI failover exception mapping for retryable provider errors.
+- Local request/usage analytics by provider, label, model, status, token counts, latency, and error category.
+- Bounded SQLite optimization with WAL, foreign keys, busy timeout, synchronous mode, temp store, and cache-size controls.
+- Interactive Artisan commands implemented with Laravel Prompts.
+
+## Requirements
+
+- PHP `^8.4`
+- Laravel components `^13.0`
+- `laravel/ai ^0.7`
+- `laravel/prompts ^0.3.6`
+
+The package is a Laravel package and is auto-discovered through the service provider declared in `composer.json`.
+
+## Installation
 
 ```bash
 composer require ferdiunal/ai-dev-api
 php artisan ai-dev-api:install
 ```
 
-Install komutu varsayılan olarak `database/ai-dev-api.sqlite` dosyasını hazırlar, paketin internal migration'larını çalıştırır, model catalog'u seed eder, SQLite optimizer'ı uygular ve interaktif ortamda direkt provider/API key + model seçim akışına götürür. Kullanıcının `database/migrations` altına AI Dev API migration dosyası publish etmesine gerek yoktur.
+The install command performs the package setup in this order:
 
-Sadece ileri seviye config override gerekiyorsa config publish edebilirsin:
+1. Creates the configured SQLite file when the package connection targets SQLite storage.
+2. Runs the package-owned internal migrations against the configured package connection.
+3. Seeds the curated model catalog and fallback ordering rows.
+4. Applies safe SQLite PRAGMA optimizations when enabled and applicable.
+5. Starts the provider-key setup wizard in an interactive console.
+
+By default, no migration file has to be published into the host application's `database/migrations` directory. The package migrations are internal package migrations and are executed by `ai-dev-api:install` against the package connection.
+
+## Configuration
+
+Publish the package config only when you need to override defaults:
 
 ```bash
 php artisan vendor:publish --tag=ai-dev-api-config
 ```
 
-Özel SQLite path veya mevcut host connection kullanımı:
-
-```env
-# Varsayılan paket connection adı ai-dev-api'dir ve dedicated SQLite dosyasını kullanır.
-AI_DEV_API_SQLITE_DATABASE=/absolute/path/ai-dev-api.sqlite
-
-# Host uygulamanın mevcut bir connection'ını kullanmak istersen buraya mysql/pgsql/sqlite gibi
-# config/database.php içinde tanımlı host connection adını yaz; `ai-dev-api` varsayılan dedicated connection'dır.
-AI_DEV_API_DB_CONNECTION=mysql
-```
-
-Önceki sürümlerde package migration stub'larını host `database/migrations` altına publish ettiysen yeni install akışı onları tekrar publish etmez ve mevcut host tablolarını otomatik taşımaz. Eski provider key/usage verisini korumak istiyorsan önce backup alıp host tablolarından dedicated `ai-dev-api` connection tablolarına tek seferlik veri taşıma migration/command'ı yazmalısın. Internal migration'lar dedicated connection üzerinde tablo zaten varsa create etmeyi atlayacak şekilde idempotent tasarlandı.
-
-## Laravel AI config
-
-`config/ai.php` içinde provider kaydı:
+Register the provider in `config/ai.php`:
 
 ```php
 'providers' => [
@@ -61,21 +71,40 @@ AI_DEV_API_DB_CONNECTION=mysql
 'default' => 'ai-dev-api',
 ```
 
-Paket config varsayılanları `config/ai-dev-api.php` içindedir:
+The package config keeps `auto` as the default text model:
 
 ```php
-'driver' => 'ai-dev-api',
+// config/ai-dev-api.php
+return [
+    'driver' => env('AI_DEV_API_DRIVER', 'ai-dev-api'),
 
-'models' => [
-    'text' => [
-        'default' => 'auto',
+    'models' => [
+        'text' => [
+            'default' => env('AI_DEV_API_DEFAULT_MODEL', 'auto'),
+        ],
+        'cache_ttl_minutes' => env('AI_DEV_API_MODELS_CACHE_TTL', 1440),
     ],
-],
+];
 ```
 
-## Provider key yönetimi
+### Package database connection
 
-Komutlar Laravel Prompts kullanır; interaktif olarak provider, label ve API key alır. `provider:add` ekleme sonrası desteklenen free modelleri provider+label bazında cacheler ve model ID/display name üzerinden arama yaparak varsayılan modeli seçtirir. Raw API key hiçbir CLI çıktısında gösterilmez.
+The default package connection name is `ai-dev-api`. When this connection name is used, the service provider registers a dedicated SQLite connection backed by `database/ai-dev-api.sqlite` unless you override the SQLite path.
+
+```env
+# Dedicated package SQLite path. This is used by the default ai-dev-api connection.
+AI_DEV_API_SQLITE_DATABASE=/absolute/path/ai-dev-api.sqlite
+
+# Optional: point package storage to an existing host application connection.
+# Use a connection name already defined in config/database.php, such as mysql, pgsql, or sqlite.
+AI_DEV_API_DB_CONNECTION=mysql
+```
+
+Use `AI_DEV_API_DB_CONNECTION` only when you intentionally want package-owned state to live on an existing host connection. The value `ai-dev-api` means the package's default dedicated SQLite connection.
+
+## Provider Key Management
+
+Provider keys are identified by `provider + label`. This allows multiple keys for the same provider, for example `openrouter / Primary`, `openrouter / Backup`, or `groq / Team`.
 
 ```bash
 php artisan ai-dev-api:provider:add
@@ -86,11 +115,19 @@ php artisan ai-dev-api:provider:disable
 php artisan ai-dev-api:provider:remove
 ```
 
-Provider key kimliği `provider + label` ile ayrılır. Örneğin aynı `openrouter` provider için `Primary`, `Backup`, `Team` gibi farklı label'lar kullanılabilir.
+`ai-dev-api:provider:add` uses Laravel Prompts to collect:
 
-## Custom OpenAI-compatible provider tanımları
+1. Provider platform.
+2. API key.
+3. Provider-key label.
+4. Optional model-cache refresh.
+5. Optional default model selection from cached free models.
 
-Kod değiştirmeden OpenAI-compatible bir gateway/proxy/provider eklemek için önce runtime provider definition oluştur, sonra normal provider key akışını kullan.
+The raw API key is encrypted before persistence and is never rendered in command output. Lists and prompts show masked credentials only.
+
+## Runtime Custom OpenAI-compatible Providers
+
+Runtime custom providers let you add OpenAI-compatible gateways, proxies, or providers without changing package code.
 
 ```bash
 php artisan ai-dev-api:provider-definition:add
@@ -103,18 +140,25 @@ php artisan ai-dev-api:provider:add
 php artisan ai-dev-api:provider:models
 ```
 
-Definition alanları:
+A runtime provider definition contains:
 
-- provider slug: örn. `my-openai-proxy`
-- name: ekranda görünen ad
-- OpenAI-compatible base URL: örn. `https://api.example.com/v1`
-- extra headers JSON: örn. `{"X-Title":"AI Dev API"}`
-- timeout ms
-- anonymous placeholder key desteği
+- Provider slug, for example `my-openai-proxy`.
+- Display name.
+- OpenAI-compatible base URL, for example `https://api.example.com/v1`.
+- Optional metadata headers as JSON, for example `{"X-Title":"AI Dev API"}`.
+- Timeout in milliseconds.
+- Optional anonymous placeholder-key support.
 
-Base URL güvenlik gereği public `https://` olmak zorundadır; credential, query/fragment, localhost, private/reserved IP ve local/test/internal hostlar reddedilir. Runtime kayıt sırasında ve custom provider isteklerinden hemen önce host DNS kayıtları public IP'lere resolve olmalı; redirect takip edilmez. Extra headers sadece metadata/proxy header'ları içindir; `Authorization`, `Proxy-Authorization`, `X-Api-Key` veya token/secret/password taşıyan header adları reddedilir. Runtime definition DB'de tutulur; API key ayrıca Laravel `Crypt::encryptString` ile provider key tablosunda encrypted saklanır.
+Security constraints are enforced before persistence and before request dispatch:
 
-Config üzerinden statik custom provider eklemek de mümkündür:
+- Base URLs must use public `https://` URLs.
+- Credentials, query strings, fragments, localhost, local/test/internal hostnames, private IPs, and reserved IPs are rejected.
+- DNS resolution must return public addresses only.
+- Redirects are not followed for runtime provider validation.
+- Authentication-bearing headers are rejected, including `Authorization`, `Proxy-Authorization`, `X-Api-Key`, and token/secret/password-like header names.
+- Extra headers are for metadata/proxy headers only; provider credentials must be stored through provider keys.
+
+You can also define static custom providers in config:
 
 ```php
 // config/ai-dev-api.php
@@ -133,17 +177,30 @@ Config üzerinden statik custom provider eklemek de mümkündür:
 ],
 ```
 
-Custom provider model refresh'i `/models` endpointini dener, free görünen `:free` model id'lerini provider+label bazında cacheler ve runtime route edilebilir model/fallback satırlarını oluşturur.
+When a custom provider returns free model IDs from its `/models` endpoint, AI Dev API can cache those model IDs by provider + label and create runtime model/fallback rows so they can participate in routing.
 
-## Model cache
+## Model Cache and Default Model Preference
 
-Bir provider key eklendiğinde veya `provider:models` komutuyla refresh edildiğinde provider'ın desteklediği free modeller cachelenir. `provider:models` cached modelleri listeler, istenirse live refresh yapar ve arama destekli seçimle varsayılan modeli DB setting olarak günceller; config default'u `auto` olarak kalır.
+Provider model caches are scoped by provider key. A cache row stores the provider platform, provider label, model ID, display name, context window, rate limits, token limits, free-tier marker, tool support marker, source, and refresh timestamp.
+
+Refresh and inspect the cache with:
 
 ```bash
 php artisan ai-dev-api:provider:models
 ```
 
-Kod içinden erişim:
+The command can refresh the selected key's cache, list cached free models, and select a default model through a searchable prompt. Model listing and default selection expose only rows that match all of these constraints:
+
+- The provider platform has a routable adapter.
+- The provider key is enabled.
+- The provider key status is not `invalid`.
+- The provider key model cache has not expired.
+- The cache row matches the provider key ID, platform, and label.
+- The cache row is enabled and marked free.
+
+The package config default remains `auto`. When the user selects a default model through the CLI, the selection is persisted in the package settings table and read at runtime by `AiDevApiProvider::defaultTextModel()`. This does not mutate config files.
+
+Programmatic model access:
 
 ```php
 use Ferdiunal\AiDevApi\AiDevApiProvider;
@@ -157,20 +214,18 @@ $modelIds = $provider->models('openrouter', 'Primary');
 // ['auto', 'qwen/qwen3-coder:free', ...]
 ```
 
-## Prompt kullanımı
+## Prompt Usage
 
-Laravel AI agent/prompt akışında model `auto` bırakıldığında router kullanılabilir provider key ve model seçer.
+Use `auto` to let AI Dev API route the request to an eligible provider key and cached free model:
 
 ```php
 $response = ai()
     ->using('ai-dev-api', 'auto')
-    ->prompt('Kısa bir özet çıkar.')
+    ->prompt('Summarize this ticket in three bullet points.')
     ->asText();
 ```
 
-Streaming path de desteklenir; OpenAI-compatible SSE chunk'ları Laravel AI stream eventlerine çevrilir.
-
-Agent attribute kullanımı:
+Agent attribute usage:
 
 ```php
 use Laravel\Ai\Attributes\Model;
@@ -186,20 +241,16 @@ final class SupportAgent implements Agent
 
     public function instructions(): string
     {
-        return 'Kısa, net ve Türkçe cevap ver.';
+        return 'Answer concisely and include operationally relevant details.';
     }
 }
 ```
 
-Structured output için Laravel AI `HasStructuredOutput` contract'ı desteklenir. Paket upstream'e JSON mode gönderir, dönen JSON metnini SDK'nın `StructuredTextResponse` / `StructuredAgentResponse` tiplerine çevirir.
-
-Tool kullanımı non-stream akışta desteklenir: provider `tool_calls` döndürürse paket tool'u çalıştırır, sonucu `tool` mesajı olarak upstream'e geri gönderir ve final cevabı döndürür. Streaming tool-call akışı henüz desteklenmediği için provider stream açılmadan açık `LogicException` fırlatılır.
-
-Failover örneği:
+Failover usage through Laravel AI provider arrays:
 
 ```php
 $response = SupportAgent::make()->prompt(
-    'Sipariş durumunu özetle.',
+    'Summarize the order status.',
     provider: [
         'ai-dev-api' => 'auto',
         'openai' => 'gpt-4o-mini',
@@ -208,64 +259,98 @@ $response = SupportAgent::make()->prompt(
 );
 ```
 
-`429/rate limit`, yetersiz kredi/kota ve geçici provider overload/timeout hataları Laravel AI failover exception tiplerine map edilir. Böylece provider array kullanan agent'larda SDK bir sonraki provider/model çiftine geçebilir.
+Retryable rate-limit, temporary overload, timeout, and insufficient-credit conditions are mapped to Laravel AI failover-compatible exception types where applicable.
 
-## Laravel AI SDK destek matrisi
+## Laravel AI SDK Capability Matrix
 
-| Capability | Durum | Not |
+| Capability | Status | Notes |
 | --- | --- | --- |
-| Text generation | Destekleniyor | `TextResponse`, usage, meta, assistant messages ve step bilgisi döner. |
-| Text streaming | Destekleniyor | `StreamStart`, `TextStart`, `TextDelta`, `TextEnd`, `StreamEnd`; SSE line/event byte limitleri var. |
-| Structured output | Destekleniyor | JSON mode + SDK `StructuredTextResponse` / `StructuredAgentResponse`. |
-| Function tools | Non-stream destekleniyor | OpenAI-compatible `tools`/`tool_calls` loop'u, tool callbacks ve step aggregation desteklenir. |
-| Streaming tools | Bilerek kapalı | Provider stream açılmadan `LogicException`; kısmi/yanlış tool stream yok. |
-| Failover | Destekleniyor | Rate limit, insufficient credits/quota, timeout/overload SDK failover exception tiplerine map edilir. |
-| Image/audio/transcription/embeddings/reranking/files/stores | Desteklenmiyor | Provider yalnızca `TextProvider` advertise eder; gateway contract gereği unsupported methodlar açık hata verir. |
+| Text generation | Supported | Returns Laravel AI `TextResponse` or `StructuredTextResponse`, including usage and metadata. |
+| Text streaming | Supported | Converts OpenAI-compatible SSE chunks into Laravel AI `StreamStart`, `TextStart`, `TextDelta`, `TextEnd`, and `StreamEnd` events. |
+| Structured output | Supported | Sends JSON-mode style options and maps valid JSON content into Laravel AI structured response types. |
+| Function tools | Supported for non-streaming | Executes OpenAI-compatible `tools` / `tool_calls` loops and sends tool result messages back to the provider. |
+| Streaming tools | Not supported | Fails before opening the upstream stream with a clear `LogicException`. |
+| Failover | Supported | Maps rate limits, insufficient credit/quota, timeout, and overload errors to Laravel AI failover exception types. |
+| Images, audio, transcription, embeddings, reranking, files, stores | Not supported | The package advertises only the text provider contract and throws explicit capability errors for unsupported methods. |
 
-## Kullanım istatistikleri
+## Usage Analytics
+
+Display usage analytics with:
 
 ```bash
 php artisan ai-dev-api:usage
 ```
 
-Tutulan alanlar:
+Tracked fields include:
 
-- provider platform
-- provider label
-- model id
-- success/error status
-- input/output/total tokens
-- latency
-- error type/category/message
+- Provider platform.
+- Provider label.
+- Model ID.
+- Success or error status.
+- Input tokens.
+- Output tokens.
+- Total tokens.
+- Latency in milliseconds.
+- Error type.
+- Error category.
+- Redacted error message.
+- Request timestamps.
 
-## SQLite optimizasyonu
+Usage rows are stored in package-owned storage and can be used to inspect provider reliability, model distribution, latency, token volume, and error trends.
 
-SQLite driver kullanıldığında ve config açıksa paket şu PRAGMA ayarlarını uygular:
+## SQLite Optimization and Package Storage
 
-- `journal_mode = WAL` (`:memory:` hariç)
-- `foreign_keys = ON`
-- `busy_timeout`
-- `synchronous`
-- `temp_store = MEMORY`
-- `cache_size`
+When the package connection uses SQLite and optimization is enabled, the package applies bounded PRAGMA settings:
 
-Config:
+- `journal_mode = WAL`, except for in-memory databases.
+- `foreign_keys = ON`.
+- `busy_timeout` from config, clamped to safe bounds.
+- `synchronous` from an allowed enum-like set.
+- `temp_store = MEMORY` when enabled.
+- `cache_size` from config, clamped to safe bounds.
+
+Relevant config shape:
 
 ```php
 'database' => [
-    'connection' => 'ai-dev-api',
+    'connection' => env('AI_DEV_API_DB_CONNECTION', 'ai-dev-api'),
     'sqlite' => [
-        'database' => database_path('ai-dev-api.sqlite'),
-        'optimize' => true,
-        'journal_mode' => 'WAL',
-        'synchronous' => 'NORMAL',
-        'busy_timeout_ms' => 5000,
-        'cache_size_kb' => 20000,
+        'database' => env('AI_DEV_API_SQLITE_DATABASE', database_path('ai-dev-api.sqlite')),
+        'optimize' => env('AI_DEV_API_SQLITE_OPTIMIZE', true),
+        'journal_mode' => env('AI_DEV_API_SQLITE_JOURNAL_MODE', 'WAL'),
+        'synchronous' => env('AI_DEV_API_SQLITE_SYNCHRONOUS', 'NORMAL'),
+        'busy_timeout_ms' => env('AI_DEV_API_SQLITE_BUSY_TIMEOUT_MS', 5000),
+        'cache_size_kb' => env('AI_DEV_API_SQLITE_CACHE_SIZE_KB', 20000),
     ],
 ],
 ```
 
-## Test ve kalite kapıları
+Internal migrations are idempotent enough to tolerate existing package tables on the package connection. They do not need to be published into host application migrations.
+
+## Security Model
+
+- Provider API keys are encrypted with Laravel `Crypt` before persistence.
+- CLI output uses masked credentials only.
+- Runtime custom provider URLs must be public HTTPS endpoints.
+- Runtime custom provider header names cannot carry authentication headers or token/secret/password-like names.
+- Provider model cache refresh marks keys invalid on authentication failures and avoids curated fallback for auth failures.
+- Usage logging redacts bearer tokens from exception messages before persistence.
+- Streaming parsers enforce line and aggregate event byte limits.
+- SQLite PRAGMA config values are clamped before execution.
+
+## Upgrade Notes
+
+Earlier versions exposed publishable migration stubs for host application migrations. The current install flow keeps package-owned migrations internal and executes them through `ai-dev-api:install` against the package connection.
+
+If you previously published package migration stubs into the host application's `database/migrations` directory and stored AI Dev API data in host tables, the new install command will not automatically move that data into the dedicated package database. To preserve existing provider keys, usage rows, model cache rows, or settings:
+
+1. Back up the host database.
+2. Install or update the package.
+3. Run `php artisan ai-dev-api:install` to prepare the package storage.
+4. Write and run a one-off migration or command that copies the old host rows into the package connection tables.
+5. Verify provider-key encryption, model cache freshness, and usage analytics after the migration.
+
+## Development and Validation
 
 ```bash
 composer format:check
@@ -274,18 +359,32 @@ composer test
 composer ci
 ```
 
-Mevcut statik analiz seviyesi: PHPStan/Larastan level 6.
+`composer ci` runs formatting checks, PHPStan analysis, and the full Pest test suite.
 
-## Güvenlik notları
+## Troubleshooting
 
-- API key'ler encrypted saklanır.
-- CLI listelerinde raw key gösterilmez; masked değer gösterilir.
-- Usage logging hata mesajlarında bearer token redaction uygular.
+### The package SQLite database file is missing
 
-## Changelog
+Run:
 
-Değişiklikler için [CHANGELOG](CHANGELOG.md) dosyasına bak.
+```bash
+php artisan ai-dev-api:install
+```
 
-## License
+If you use a custom path, verify `AI_DEV_API_SQLITE_DATABASE` points to a writable location and that the parent directory can be created by the application user.
 
-MIT. Detay için [LICENSE.md](LICENSE.md).
+### A provider key is marked invalid
+
+Authentication failures during model refresh or routed requests mark the selected key invalid. Add a new key or re-enable/update the key after verifying the credential with the provider.
+
+### Cached models are not shown
+
+`ai-dev-api:provider:models` exposes only routable, enabled, non-invalid, non-expired cache rows for the selected provider key. Refresh the selected key's cache and verify the provider adapter is implemented.
+
+### Streaming tools fail before the provider stream opens
+
+Streaming tool calls are intentionally unsupported. Use non-streaming text generation when tools are required.
+
+### A custom provider base URL is rejected
+
+Ensure the URL uses public HTTPS, has no credentials/query/fragment, does not point to localhost or private/reserved networks, and resolves only to public IP addresses.

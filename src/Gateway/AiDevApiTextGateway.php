@@ -60,10 +60,16 @@ use LogicException;
 use RuntimeException;
 use Throwable;
 
+/**
+ * Adapts Laravel AI text generation and streaming calls to routed OpenAI-compatible provider keys.
+ */
 final class AiDevApiTextGateway implements Gateway
 {
     use InvokesTools;
 
+    /**
+     * Initialize the gateway with routing, adapter dispatch, rate-limit, and usage logging services.
+     */
     public function __construct(
         private readonly AiDevApiRouter $router,
         private readonly ProviderAdapterRegistry $adapters,
@@ -72,6 +78,8 @@ final class AiDevApiTextGateway implements Gateway
     ) {}
 
     /**
+     * Route a Laravel AI text request, call the selected upstream provider, execute supported tool loops, and persist usage telemetry.
+     *
      * @param  array<int, Message>  $messages
      * @param  array<int, Tool>  $tools
      * @param  array<string, Type>|null  $schema
@@ -139,6 +147,8 @@ final class AiDevApiTextGateway implements Gateway
     }
 
     /**
+     * Route a Laravel AI streaming request, translate provider SSE chunks to Laravel AI stream events, and persist usage telemetry.
+     *
      * @param  array<int, Message>  $messages
      * @param  array<int, Tool>  $tools
      * @param  array<string, Type>|null  $schema
@@ -261,6 +271,9 @@ final class AiDevApiTextGateway implements Gateway
         }
     }
 
+    /**
+     * Reject audio generation because this package currently implements only Laravel AI text provider capabilities.
+     */
     public function generateAudio(
         AudioProvider $provider,
         string $model,
@@ -272,12 +285,17 @@ final class AiDevApiTextGateway implements Gateway
         throw new LogicException('AI Dev API does not support audio generation.');
     }
 
+    /**
+     * Reject embedding generation because this package currently implements only Laravel AI text provider capabilities.
+     */
     public function generateEmbeddings(EmbeddingProvider $provider, string $model, array $inputs, int $dimensions, int $timeout = 30, array $providerOptions = []): EmbeddingsResponse
     {
         throw new LogicException('AI Dev API does not support embeddings.');
     }
 
     /**
+     * Reject image generation because this package currently implements only Laravel AI text provider capabilities.
+     *
      * @param  array<Image>  $attachments
      */
     public function generateImage(
@@ -292,6 +310,9 @@ final class AiDevApiTextGateway implements Gateway
         throw new LogicException('AI Dev API does not support image generation.');
     }
 
+    /**
+     * Reject transcription generation because this package currently implements only Laravel AI text provider capabilities.
+     */
     public function generateTranscription(
         TranscriptionProvider $provider,
         string $model,
@@ -305,6 +326,8 @@ final class AiDevApiTextGateway implements Gateway
     }
 
     /**
+     * Convert Laravel AI instructions and message objects into OpenAI-compatible chat message arrays.
+     *
      * @param  array<int, Message>  $messages
      * @return array<int, array<string, mixed>>
      */
@@ -348,6 +371,8 @@ final class AiDevApiTextGateway implements Gateway
     }
 
     /**
+     * Convert Laravel AI generation options, structured-output schema, and tools into OpenAI-compatible request options.
+     *
      * @param  array<string, Type>|null  $schema
      * @param  array<int, Tool>  $tools
      * @return array<string, mixed>
@@ -381,6 +406,8 @@ final class AiDevApiTextGateway implements Gateway
     }
 
     /**
+     * Normalize an upstream completion response into Laravel AI text or structured response objects.
+     *
      * @param  array<string, mixed>  $data
      * @param  array<int, Tool>  $tools
      * @param  array<string, Type>|null  $schema
@@ -475,6 +502,8 @@ final class AiDevApiTextGateway implements Gateway
     }
 
     /**
+     * Execute provider-requested tool calls through Laravel AI and return tool result messages for the follow-up request.
+     *
      * @param  array<int, ToolCall>  $toolCalls
      * @param  array<int, Tool>  $tools
      * @return array<int, ToolResult>
@@ -502,7 +531,11 @@ final class AiDevApiTextGateway implements Gateway
         return $results;
     }
 
-    /** @param array<int, Tool> $tools */
+    /**
+     * Resolve the bounded number of provider tool-call continuation steps allowed for one request.
+     *
+     * @param  array<int, Tool>  $tools
+     */
     private function maxToolSteps(array $tools, ?TextGenerationOptions $options): int
     {
         if ($options instanceof TextGenerationOptions && $options->maxSteps !== null) {
@@ -513,6 +546,8 @@ final class AiDevApiTextGateway implements Gateway
     }
 
     /**
+     * Convert Laravel AI tools into OpenAI-compatible tool definitions.
+     *
      * @param  array<int, Tool>  $tools
      * @return array<int, array<string, mixed>>
      */
@@ -533,7 +568,11 @@ final class AiDevApiTextGateway implements Gateway
         return $mapped;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Convert one Laravel AI tool definition into an OpenAI-compatible function tool payload.
+     *
+     * @return array<string, mixed>
+     */
     private function mapTool(Tool $tool): array
     {
         $schemaArray = (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toSchema();
@@ -554,6 +593,8 @@ final class AiDevApiTextGateway implements Gateway
     }
 
     /**
+     * Extract normalized tool-call descriptors from an OpenAI-compatible completion response.
+     *
      * @param  array<string, mixed>  $data
      * @return array<int, ToolCall>
      */
@@ -577,7 +618,11 @@ final class AiDevApiTextGateway implements Gateway
             ->all();
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Decode provider-supplied JSON tool arguments into an associative array for local tool invocation.
+     *
+     * @return array<string, mixed>
+     */
     private function decodeToolArguments(string $arguments): array
     {
         $decoded = json_decode($arguments, true);
@@ -585,7 +630,11 @@ final class AiDevApiTextGateway implements Gateway
         return is_array($decoded) ? $decoded : [];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Build the assistant message payload that records the upstream provider tool-call turn.
+     *
+     * @return array<string, mixed>
+     */
     private function assistantMessagePayload(AssistantMessage $message): array
     {
         $payload = ['role' => 'assistant'];
@@ -603,7 +652,11 @@ final class AiDevApiTextGateway implements Gateway
         return $payload;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Serialize a Laravel AI tool call into the OpenAI-compatible assistant message shape.
+     *
+     * @return array<string, mixed>
+     */
     private function serializeToolCall(ToolCall $toolCall): array
     {
         return [
@@ -617,6 +670,8 @@ final class AiDevApiTextGateway implements Gateway
     }
 
     /**
+     * Convert executed tool results into OpenAI-compatible tool result messages.
+     *
      * @param  array<int, ToolResult>  $toolResults
      * @return array<int, array<string, mixed>>
      */
@@ -629,6 +684,9 @@ final class AiDevApiTextGateway implements Gateway
         ], $toolResults);
     }
 
+    /**
+     * Serialize a tool result value into a string payload safe for upstream provider continuation.
+     */
     private function serializeToolResultOutput(mixed $output): string
     {
         if (is_string($output)) {
@@ -638,7 +696,11 @@ final class AiDevApiTextGateway implements Gateway
         return is_array($output) ? (string) json_encode($output) : (string) $output;
     }
 
-    /** @param array<string, mixed> $data */
+    /**
+     * Extract token usage metadata from an OpenAI-compatible completion response.
+     *
+     * @param  array<string, mixed>  $data
+     */
     private function usageFromResponse(array $data): Usage
     {
         return new Usage(
@@ -647,7 +709,11 @@ final class AiDevApiTextGateway implements Gateway
         );
     }
 
-    /** @param Collection<int, Step> $steps */
+    /**
+     * Aggregate usage across tool-call continuation steps into a single Laravel AI usage object.
+     *
+     * @param  Collection<int, Step>  $steps
+     */
     private function combineUsage(Collection $steps): Usage
     {
         return $steps->reduce(
@@ -656,7 +722,11 @@ final class AiDevApiTextGateway implements Gateway
         );
     }
 
-    /** @param array<string, mixed> $data */
+    /**
+     * Map an upstream completion finish reason to a Laravel AI FinishReason enum value.
+     *
+     * @param  array<string, mixed>  $data
+     */
     private function finishReasonFromResponse(array $data): FinishReason
     {
         return match ((string) data_get($data, 'choices.0.finish_reason', '')) {
@@ -668,6 +738,9 @@ final class AiDevApiTextGateway implements Gateway
         };
     }
 
+    /**
+     * Resolve the max-output-token request budget from Laravel AI text generation options.
+     */
     private function maxOutputTokens(?TextGenerationOptions $options): int
     {
         if ($options === null) {
@@ -677,17 +750,27 @@ final class AiDevApiTextGateway implements Gateway
         return $options->maxTokens ?? 1000;
     }
 
+    /**
+     * Return the Laravel AI provider driver name for telemetry and stream metadata.
+     */
     private function providerDriver(TextProvider $provider): string
     {
         return $provider instanceof BaseProvider ? $provider->driver() : 'ai-dev-api';
     }
 
+    /**
+     * Return the displayable Laravel AI provider name for response and stream metadata.
+     */
     private function providerName(TextProvider $provider): string
     {
         return $provider instanceof BaseProvider ? $provider->name() : $this->providerDriver($provider);
     }
 
-    /** @param array<int, array<string, mixed>> $messages */
+    /**
+     * Estimate prompt and output tokens for local routing limits when upstream usage is unavailable.
+     *
+     * @param  array<int, array<string, mixed>>  $messages
+     */
     private function estimateTokens(array $messages, int $maxOutputTokens): int
     {
         $chars = collect($messages)->sum(fn (array $message): int => strlen((string) ($message['content'] ?? '')));
@@ -695,7 +778,11 @@ final class AiDevApiTextGateway implements Gateway
         return max(1, (int) ceil($chars / 4)) + $maxOutputTokens;
     }
 
-    /** @param array<string, mixed> $data */
+    /**
+     * Extract the assistant content string from an OpenAI-compatible completion response.
+     *
+     * @param  array<string, mixed>  $data
+     */
     private function contentFromResponse(array $data): string
     {
         $content = data_get($data, 'choices.0.message.content', '');
@@ -707,7 +794,11 @@ final class AiDevApiTextGateway implements Gateway
         return (string) $content;
     }
 
-    /** @param array<string, mixed> $chunk */
+    /**
+     * Extract a text delta from an OpenAI-compatible streaming chunk.
+     *
+     * @param  array<string, mixed>  $chunk
+     */
     private function streamDelta(array $chunk): string
     {
         $content = data_get($chunk, 'choices.0.delta.content', '');
@@ -719,7 +810,11 @@ final class AiDevApiTextGateway implements Gateway
         return (string) $content;
     }
 
-    /** @param array<string, mixed> $chunk */
+    /**
+     * Extract a terminal finish reason from an OpenAI-compatible streaming chunk.
+     *
+     * @param  array<string, mixed>  $chunk
+     */
     private function streamFinishReason(array $chunk): ?string
     {
         $reason = data_get($chunk, 'choices.0.finish_reason');
@@ -728,6 +823,8 @@ final class AiDevApiTextGateway implements Gateway
     }
 
     /**
+     * Extract token usage from an upstream streaming chunk when present.
+     *
      * @param  array<string, mixed>  $chunk
      * @return array{input_tokens: int, output_tokens: int, total_tokens: int}|null
      */
@@ -749,16 +846,25 @@ final class AiDevApiTextGateway implements Gateway
         ];
     }
 
+    /**
+     * Generate an event identifier for Laravel AI streaming events.
+     */
     private function eventId(): string
     {
         return strtolower((string) Str::uuid7());
     }
 
+    /**
+     * Calculate elapsed request latency in milliseconds for usage analytics.
+     */
     private function latencyMs(float $startedAt): int
     {
         return (int) round((microtime(true) - $startedAt) * 1000);
     }
 
+    /**
+     * Classify an exception for routing cooldown, key invalidation, failover mapping, and usage analytics.
+     */
     private function errorCategory(Throwable $exception): string
     {
         if ($exception instanceof ProviderAuthenticationException) {
@@ -799,11 +905,17 @@ final class AiDevApiTextGateway implements Gateway
         };
     }
 
+    /**
+     * Determine whether an error category should put the selected route into local cooldown.
+     */
     private function shouldCooldownRoute(string $category): bool
     {
         return in_array($category, ['rate_limit', 'insufficient_credits', 'timeout', 'server'], true);
     }
 
+    /**
+     * Map provider and transport failures to Laravel AI SDK exception types for failover compatibility.
+     */
     private function mapExceptionForSdk(Throwable $exception, TextProvider $provider, string $category): Throwable
     {
         if ($exception instanceof RateLimitedException || $exception instanceof InsufficientCreditsException || $exception instanceof ProviderOverloadedException) {

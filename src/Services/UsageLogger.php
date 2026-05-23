@@ -8,9 +8,16 @@ use Ferdiunal\AiDevApi\Models\AiDevApiRequest;
 use Ferdiunal\AiDevApi\Routing\RouteResult;
 use Throwable;
 
+/**
+ * Persists success and error usage rows while redacting bearer tokens from exception messages.
+ */
 final class UsageLogger
 {
-    /** @param array<string, mixed> $metadata */
+    /**
+     * Persist a successful routed request with token counts and latency metadata.
+     *
+     * @param  array<string, mixed>  $metadata
+     */
     public function success(RouteResult $route, int $inputTokens, int $outputTokens, int $latencyMs, int $attempt = 1, array $metadata = []): void
     {
         $this->write([
@@ -29,7 +36,11 @@ final class UsageLogger
         ]);
     }
 
-    /** @param array<string, mixed> $metadata */
+    /**
+     * Persist a failed routed request with redacted error metadata and optional route context.
+     *
+     * @param  array<string, mixed>  $metadata
+     */
     public function error(?RouteResult $route, Throwable|string $error, string $category, int $latencyMs, int $attempt = 1, array $metadata = []): void
     {
         $message = $error instanceof Throwable ? $error->getMessage() : $error;
@@ -65,7 +76,11 @@ final class UsageLogger
         ]);
     }
 
-    /** @param array<string, mixed> $attributes */
+    /**
+     * Write a usage analytics row to package storage with route, token, latency, and error metadata.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
     private function write(array $attributes): void
     {
         try {
@@ -75,6 +90,9 @@ final class UsageLogger
         }
     }
 
+    /**
+     * Redact bearer tokens from exception messages before persistence.
+     */
     private function redact(string $message): string
     {
         return preg_replace('/(Bearer\s+)[A-Za-z0-9._:\-]+/i', '$1[REDACTED]', $message) ?? $message;

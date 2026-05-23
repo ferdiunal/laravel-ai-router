@@ -14,9 +14,16 @@ use Ferdiunal\AiDevApi\Support\ProviderDefinitionValidator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Manages runtime custom provider definitions and their related model, fallback, cache, and key artifacts.
+ */
 final class ProviderDefinitionManager
 {
-    /** @param array<string, mixed> $headers */
+    /**
+     * Validate and persist a runtime OpenAI-compatible provider definition.
+     *
+     * @param  array<string, mixed>  $headers
+     */
     public function addOpenAiCompatible(
         string $platform,
         string $name,
@@ -86,6 +93,9 @@ final class ProviderDefinitionManager
         ]);
     }
 
+    /**
+     * Remove a runtime custom provider definition and deactivate related runtime artifacts.
+     */
     public function remove(int $id): bool
     {
         return DB::connection(config('ai-dev-api.database.connection') ?: 'ai-dev-api')->transaction(function () use ($id): bool {
@@ -100,6 +110,9 @@ final class ProviderDefinitionManager
         });
     }
 
+    /**
+     * Enable or disable a runtime custom provider definition by its package database primary key.
+     */
     public function setEnabled(int $id, bool $enabled): AiDevApiProviderDefinition
     {
         return DB::connection(config('ai-dev-api.database.connection') ?: 'ai-dev-api')->transaction(function () use ($id, $enabled): AiDevApiProviderDefinition {
@@ -114,6 +127,9 @@ final class ProviderDefinitionManager
         });
     }
 
+    /**
+     * Disable runtime model, fallback, cache, and key artifacts associated with a custom provider definition.
+     */
     private function deactivateRuntimeArtifacts(string $platform): void
     {
         $modelIds = AiDevApiModel::query()

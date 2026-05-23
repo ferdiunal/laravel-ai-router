@@ -10,12 +10,18 @@ use Illuminate\Console\Command;
 
 use function Laravel\Prompts\table;
 
+/**
+ * Lists stored provider keys with masked credentials and model cache metadata.
+ */
 final class ProviderListCommand extends Command
 {
     protected $signature = 'ai-dev-api:provider:list';
 
     protected $description = 'List provider API keys with masked API values.';
 
+    /**
+     * Render provider keys with labels, masked credentials, status, cache timestamps, and enabled flags.
+     */
     public function handle(ProviderModelCacheService $modelCache): int
     {
         $rows = AiDevApiProviderKey::query()->orderBy('platform')->orderBy('label')->get()

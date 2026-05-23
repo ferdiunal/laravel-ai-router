@@ -7,6 +7,8 @@ namespace Ferdiunal\AiDevApi\Models;
 use Illuminate\Support\Carbon;
 
 /**
+ * Represents request, token, and cooldown counters used for local routing throttles.
+ *
  * @property int $id
  * @property string $platform
  * @property string $model_id
@@ -26,6 +28,9 @@ final class AiDevApiRateWindow extends AiDevApiBaseModel
 
     protected $guarded = [];
 
+    /**
+     * Return Eloquent attribute cast definitions for this model.
+     */
     protected function casts(): array
     {
         return [

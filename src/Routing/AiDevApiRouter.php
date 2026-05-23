@@ -12,13 +12,22 @@ use Ferdiunal\AiDevApi\Models\AiDevApiModel;
 use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
 use Ferdiunal\AiDevApi\Models\AiDevApiProviderModelCache;
 
+/**
+ * Selects the best eligible provider key and model for a requested Laravel AI text operation.
+ */
 final class AiDevApiRouter
 {
+    /**
+     * Initialize the router with adapter availability checks and rate-window state.
+     */
     public function __construct(
         private readonly ProviderAdapterRegistry $adapters,
         private readonly RateLimitWindowRepository $rateLimits,
     ) {}
 
+    /**
+     * Select an eligible provider key and model for the requested model identifier and token/tool requirements.
+     */
     public function route(?string $modelId = 'auto', int $estimatedTokens = 1000, bool $requiresTools = false): RouteResult
     {
         if ($modelId !== null && $modelId !== '' && $modelId !== 'auto') {
@@ -75,6 +84,9 @@ final class AiDevApiRouter
         throw new NoAvailableModelException('All AI Dev API models are exhausted. Add an enabled provider key or wait for limits to reset.');
     }
 
+    /**
+     * Persist retry penalty state for a route after a retryable provider failure.
+     */
     public function recordRetryableFailure(RouteResult $route): void
     {
         $fallback = AiDevApiFallback::query()->where('ai_dev_api_model_id', $route->modelDbId)->first();
@@ -92,6 +104,9 @@ final class AiDevApiRouter
         ])->save();
     }
 
+    /**
+     * Clear retry penalty state for a route after a successful provider request.
+     */
     public function recordSuccess(RouteResult $route): void
     {
         $fallback = AiDevApiFallback::query()->where('ai_dev_api_model_id', $route->modelDbId)->first();
@@ -106,6 +121,9 @@ final class AiDevApiRouter
         ])->save();
     }
 
+    /**
+     * Mark the selected provider key invalid after an authentication failure.
+     */
     public function recordAuthFailure(RouteResult $route): void
     {
         $key = AiDevApiProviderKey::query()->find($route->keyId);
@@ -120,6 +138,9 @@ final class AiDevApiRouter
         ])->save();
     }
 
+    /**
+     * Return the first enabled non-invalid provider key that is not currently in cooldown for the model.
+     */
     private function firstUsableKey(AiDevApiModel $model, int $estimatedTokens, bool $requiresTools): ?AiDevApiProviderKey
     {
         $keys = AiDevApiProviderKey::query()
@@ -160,6 +181,9 @@ final class AiDevApiRouter
         return null;
     }
 
+    /**
+     * Determine whether a provider key exposes a healthy non-expired cache row for the requested model.
+     */
     private function keySupportsModel(AiDevApiProviderKey $key, AiDevApiModel $model, bool $requiresTools): bool
     {
         $hasCacheRows = AiDevApiProviderModelCache::query()
@@ -190,6 +214,9 @@ final class AiDevApiRouter
         return $cacheQuery->exists();
     }
 
+    /**
+     * Build the immutable route result object from a model row and provider key row.
+     */
     private function toResult(AiDevApiModel $model, AiDevApiProviderKey $key): RouteResult
     {
         $key->forceFill(['last_used_at' => now()])->save();

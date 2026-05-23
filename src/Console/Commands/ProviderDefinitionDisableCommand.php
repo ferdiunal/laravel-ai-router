@@ -11,6 +11,9 @@ use Illuminate\Console\Command;
 use function Laravel\Prompts\info;
 use function Laravel\Prompts\warning;
 
+/**
+ * Disables a runtime custom provider definition and deactivates its runtime routing artifacts.
+ */
 final class ProviderDefinitionDisableCommand extends Command
 {
     use InteractsWithProviderPrompts;
@@ -19,6 +22,9 @@ final class ProviderDefinitionDisableCommand extends Command
 
     protected $description = 'Disable a custom provider definition selected by slug.';
 
+    /**
+     * Prompt for a runtime provider definition and disable it with related runtime artifacts.
+     */
     public function handle(ProviderDefinitionManager $definitions): int
     {
         $definition = $this->definitionPrompt('Which custom provider definition should be disabled?');

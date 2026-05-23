@@ -11,6 +11,9 @@ use Illuminate\Console\Command;
 use function Laravel\Prompts\info;
 use function Laravel\Prompts\warning;
 
+/**
+ * Disables an encrypted provider key so it is excluded from routing and model selection.
+ */
 final class ProviderDisableCommand extends Command
 {
     use InteractsWithProviderPrompts;
@@ -19,6 +22,9 @@ final class ProviderDisableCommand extends Command
 
     protected $description = 'Disable a provider key selected by provider and label.';
 
+    /**
+     * Prompt for a provider key and disable routing through that provider-label credential.
+     */
     public function handle(ProviderKeyManager $keys): int
     {
         $key = $this->keyPrompt('Which provider key should be disabled?');

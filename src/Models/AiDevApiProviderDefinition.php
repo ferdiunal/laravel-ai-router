@@ -7,6 +7,8 @@ namespace Ferdiunal\AiDevApi\Models;
 use Illuminate\Support\Carbon;
 
 /**
+ * Represents a runtime custom OpenAI-compatible provider definition stored in package storage.
+ *
  * @property int $id
  * @property string $platform
  * @property string $name
@@ -25,6 +27,9 @@ final class AiDevApiProviderDefinition extends AiDevApiBaseModel
 
     protected $guarded = [];
 
+    /**
+     * Return Eloquent attribute cast definitions for this model.
+     */
     protected function casts(): array
     {
         return [

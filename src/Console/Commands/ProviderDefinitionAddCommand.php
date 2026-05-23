@@ -13,6 +13,9 @@ use function Laravel\Prompts\info;
 use function Laravel\Prompts\outro;
 use function Laravel\Prompts\warning;
 
+/**
+ * Creates a runtime OpenAI-compatible provider definition after validating URL, header, and timeout constraints.
+ */
 final class ProviderDefinitionAddCommand extends Command
 {
     use InteractsWithProviderPrompts;
@@ -21,6 +24,9 @@ final class ProviderDefinitionAddCommand extends Command
 
     protected $description = 'Add a custom OpenAI-compatible provider definition using Laravel Prompts.';
 
+    /**
+     * Collect and persist a validated runtime OpenAI-compatible provider definition through prompts.
+     */
     public function handle(ProviderDefinitionManager $definitions): int
     {
         $platform = $this->textPrompt('Provider slug', 'custom-openai', required: true);

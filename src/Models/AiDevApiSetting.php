@@ -7,6 +7,8 @@ namespace Ferdiunal\AiDevApi\Models;
 use Illuminate\Support\Carbon;
 
 /**
+ * Represents package-level settings such as the persisted default text model preference.
+ *
  * @property string $key
  * @property array<string, mixed>|null $value
  * @property Carbon|null $created_at
@@ -24,6 +26,9 @@ final class AiDevApiSetting extends AiDevApiBaseModel
 
     protected $guarded = [];
 
+    /**
+     * Return Eloquent attribute cast definitions for this model.
+     */
     protected function casts(): array
     {
         return [

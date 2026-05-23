@@ -11,6 +11,9 @@ use Illuminate\Console\Command;
 use function Laravel\Prompts\info;
 use function Laravel\Prompts\warning;
 
+/**
+ * Enables an existing runtime custom provider definition for provider-key setup and routing.
+ */
 final class ProviderDefinitionEnableCommand extends Command
 {
     use InteractsWithProviderPrompts;
@@ -19,6 +22,9 @@ final class ProviderDefinitionEnableCommand extends Command
 
     protected $description = 'Enable a custom provider definition selected by slug.';
 
+    /**
+     * Prompt for a runtime provider definition and enable it for catalog and key management workflows.
+     */
     public function handle(ProviderDefinitionManager $definitions): int
     {
         $definition = $this->definitionPrompt('Which custom provider definition should be enabled?');

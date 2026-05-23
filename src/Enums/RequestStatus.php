@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Ferdiunal\AiDevApi\Enums;
 
+/**
+ * Enumerates the request outcomes persisted in usage analytics rows.
+ */
 enum RequestStatus: string
 {
     case Success = 'success';

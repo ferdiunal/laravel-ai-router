@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Ferdiunal\AiDevApi\Support;
 
+/**
+ * Normalizes and validates runtime custom provider definitions before persistence and routing use.
+ */
 final class ProviderDefinitionValidator
 {
     /** @var list<string> */
@@ -71,6 +74,8 @@ final class ProviderDefinitionValidator
     ];
 
     /**
+     * Validate and normalize user-supplied custom OpenAI-compatible provider definition data.
+     *
      * @param  array<string, mixed>  $definition
      * @return array<string, mixed>|null
      */
@@ -113,6 +118,9 @@ final class ProviderDefinitionValidator
         ];
     }
 
+    /**
+     * Return a validation error for an invalid custom provider platform slug.
+     */
     public static function platformError(string $platform): ?string
     {
         if (! preg_match('/^[a-z0-9][a-z0-9._-]{1,62}[a-z0-9]$/', $platform)) {
@@ -122,6 +130,9 @@ final class ProviderDefinitionValidator
         return null;
     }
 
+    /**
+     * Return a validation error for an unsafe or invalid custom provider base URL.
+     */
     public static function baseUrlError(string $baseUrl, bool $requirePublicDns = false): ?string
     {
         if (self::normalizeBaseUrl($baseUrl, requirePublicDns: $requirePublicDns) === null) {
@@ -131,6 +142,9 @@ final class ProviderDefinitionValidator
         return null;
     }
 
+    /**
+     * Normalize a custom provider base URL after validating scheme, host, credentials, and path safety.
+     */
     public static function normalizeBaseUrl(string $baseUrl, bool $requirePublicDns = false): ?string
     {
         $baseUrl = rtrim(trim($baseUrl), '/');
@@ -163,7 +177,11 @@ final class ProviderDefinitionValidator
         return self::buildUrl($parts, $host);
     }
 
-    /** @return list<string> */
+    /**
+     * Resolve the public IP addresses associated with a custom provider base URL.
+     *
+     * @return list<string>
+     */
     public static function publicAddressesForBaseUrl(string $baseUrl): array
     {
         $normalizedBaseUrl = self::normalizeBaseUrl($baseUrl, requirePublicDns: true);
@@ -194,7 +212,11 @@ final class ProviderDefinitionValidator
         return array_values(array_unique($addresses));
     }
 
-    /** @param array<mixed, mixed> $headers */
+    /**
+     * Return a validation error for unsafe custom provider header input.
+     *
+     * @param  array<mixed, mixed>  $headers
+     */
     public static function headersError(array $headers): ?string
     {
         foreach ($headers as $name => $value) {
@@ -229,6 +251,8 @@ final class ProviderDefinitionValidator
     }
 
     /**
+     * Normalize custom provider headers while rejecting authentication-bearing or sensitive header names.
+     *
      * @param  array<mixed, mixed>  $headers
      * @return array<string, string>
      */
@@ -261,11 +285,17 @@ final class ProviderDefinitionValidator
         return $sanitized;
     }
 
+    /**
+     * Normalize the custom provider timeout to a bounded millisecond value.
+     */
     public static function normalizeTimeout(mixed $timeoutMs): int
     {
         return min(300_000, max(1_000, (int) $timeoutMs));
     }
 
+    /**
+     * Normalize a host name for safety checks and DNS resolution.
+     */
     private static function normalizeHost(string $host): ?string
     {
         $host = strtolower(rtrim(trim($host), '.'));
@@ -302,7 +332,11 @@ final class ProviderDefinitionValidator
         return $host;
     }
 
-    /** @param array<string, mixed> $parts */
+    /**
+     * Build a normalized URL from parsed URL components for storage and outbound requests.
+     *
+     * @param  array<string, mixed>  $parts
+     */
     private static function buildUrl(array $parts, string $host): ?string
     {
         $url = 'https://'.$host;
@@ -328,6 +362,9 @@ final class ProviderDefinitionValidator
         return rtrim($url, '/');
     }
 
+    /**
+     * Determine whether a host name is local, private, reserved, or otherwise unsafe for runtime provider calls.
+     */
     private static function hostIsUnsafe(string $host): bool
     {
         if (in_array($host, ['localhost', 'metadata.google.internal'], true)) {
@@ -347,6 +384,9 @@ final class ProviderDefinitionValidator
         return ! str_contains($host, '.');
     }
 
+    /**
+     * Determine whether DNS resolution for a host returns only public IP addresses.
+     */
     private static function hostResolvesOnlyToPublicAddresses(string $host): bool
     {
         if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
@@ -367,7 +407,11 @@ final class ProviderDefinitionValidator
         return true;
     }
 
-    /** @return list<string> */
+    /**
+     * Resolve a host name to candidate IP addresses for public-address validation.
+     *
+     * @return list<string>
+     */
     private static function resolveHost(string $host): array
     {
         $addresses = [];
@@ -396,6 +440,9 @@ final class ProviderDefinitionValidator
         return array_values(array_unique($addresses));
     }
 
+    /**
+     * Normalize a header name before sensitivity checks and storage.
+     */
     private static function normalizeHeaderName(string $name): ?string
     {
         $name = strtolower(trim($name));
@@ -403,6 +450,9 @@ final class ProviderDefinitionValidator
         return preg_match("/^[a-z0-9!#\$%&'*+\-.^_`|~]+$/", $name) === 1 ? $name : null;
     }
 
+    /**
+     * Determine whether a header name can carry credentials or secret material and must be rejected.
+     */
     private static function headerNameIsSensitive(string $name): bool
     {
         if (in_array($name, self::SENSITIVE_HEADER_NAMES, true)) {
@@ -427,6 +477,9 @@ final class ProviderDefinitionValidator
         return false;
     }
 
+    /**
+     * Determine whether an IP address is globally routable and safe for custom provider calls.
+     */
     private static function ipAddressIsPublic(string $address): bool
     {
         if (filter_var($address, FILTER_VALIDATE_IP) === false) {
@@ -442,6 +495,9 @@ final class ProviderDefinitionValidator
         return filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
     }
 
+    /**
+     * Determine whether an IP address belongs to the given CIDR block.
+     */
     private static function ipMatchesCidr(string $address, string $cidr): bool
     {
         [$network, $prefix] = explode('/', $cidr, 2);

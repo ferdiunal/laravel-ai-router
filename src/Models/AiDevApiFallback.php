@@ -7,6 +7,8 @@ namespace Ferdiunal\AiDevApi\Models;
 use Illuminate\Support\Carbon;
 
 /**
+ * Represents fallback ordering and penalty state for a routable package model.
+ *
  * @property int $id
  * @property int $ai_dev_api_model_id
  * @property int $priority
@@ -22,6 +24,9 @@ final class AiDevApiFallback extends AiDevApiBaseModel
 
     protected $guarded = [];
 
+    /**
+     * Return Eloquent attribute cast definitions for this model.
+     */
     protected function casts(): array
     {
         return [

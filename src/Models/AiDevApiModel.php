@@ -7,6 +7,8 @@ namespace Ferdiunal\AiDevApi\Models;
 use Illuminate\Support\Carbon;
 
 /**
+ * Represents a curated or runtime-discovered model that can be used by the router.
+ *
  * @property int $id
  * @property string $platform
  * @property string $model_id
@@ -29,6 +31,9 @@ final class AiDevApiModel extends AiDevApiBaseModel
 
     protected $guarded = [];
 
+    /**
+     * Return Eloquent attribute cast definitions for this model.
+     */
     protected function casts(): array
     {
         return [

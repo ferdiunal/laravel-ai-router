@@ -8,8 +8,14 @@ use Ferdiunal\AiDevApi\Models\AiDevApiFallback;
 use Ferdiunal\AiDevApi\Models\AiDevApiModel;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Seeds package-owned model and fallback rows from the curated model catalog without overwriting existing routing priorities.
+ */
 final class SeedModelCatalog
 {
+    /**
+     * Seed package model and fallback rows transactionally on the package database connection.
+     */
     public function seed(): void
     {
         DB::connection(config('ai-dev-api.database.connection') ?: 'ai-dev-api')->transaction(function (): void {

@@ -2,6 +2,19 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.1.2 - 2026-05-23
+
+### Fixed
+
+- Removed the unused `spatie/ray` development dependency so PHP 8.4 deprecation annotations from Ray no longer appear in the CI matrix.
+- Pinned the Windows CI lane to `windows-2022` to avoid GitHub runner redirect notices while keeping Windows coverage active.
+
+### Validation
+
+- Local `composer validate --strict`
+- Local `composer ci`
+- GitHub Actions Tests matrix on `main`: Ubuntu/Windows x prefer-stable/prefer-lowest passed with 0 check-run annotations
+
 ## v0.1.1 - 2026-05-23
 
 ### Fixed

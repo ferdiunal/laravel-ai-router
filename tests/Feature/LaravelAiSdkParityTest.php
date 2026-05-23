@@ -233,6 +233,7 @@ it('maps retryable provider failures to Laravel AI failover exceptions', functio
     seedLaravelAiRouterKeyForSdkParity('Backup');
 
     config()->set('ai.providers.laravel-ai-router-backup', ['driver' => 'laravel-ai-router']);
+    config()->set('laravel-ai-router.routing.max_attempts', 1);
 
     Event::fake([AgentFailedOver::class]);
 
@@ -319,6 +320,7 @@ it('can fail over streaming prompts before emitting stream events', function () 
     seedLaravelAiRouterKeyForSdkParity('Backup');
 
     config()->set('ai.providers.laravel-ai-router-backup', ['driver' => 'laravel-ai-router']);
+    config()->set('laravel-ai-router.routing.max_attempts', 1);
 
     Event::fake([AgentFailedOver::class]);
 
@@ -365,6 +367,7 @@ it('maps generic payment required responses to insufficient credit failover', fu
     seedLaravelAiRouterKeyForSdkParity('Backup');
 
     config()->set('ai.providers.laravel-ai-router-backup', ['driver' => 'laravel-ai-router']);
+    config()->set('laravel-ai-router.routing.max_attempts', 1);
 
     Event::fake([AgentFailedOver::class]);
 
@@ -413,6 +416,7 @@ it('maps generic provider overload responses to failover', function () {
     seedLaravelAiRouterKeyForSdkParity('Backup');
 
     config()->set('ai.providers.laravel-ai-router-backup', ['driver' => 'laravel-ai-router']);
+    config()->set('laravel-ai-router.routing.max_attempts', 1);
 
     Event::fake([AgentFailedOver::class]);
 
@@ -461,6 +465,7 @@ it('maps connection timed out failures to provider overload failover', function 
     seedLaravelAiRouterKeyForSdkParity('Backup');
 
     config()->set('ai.providers.laravel-ai-router-backup', ['driver' => 'laravel-ai-router']);
+    config()->set('laravel-ai-router.routing.max_attempts', 1);
 
     Event::fake([AgentFailedOver::class]);
 

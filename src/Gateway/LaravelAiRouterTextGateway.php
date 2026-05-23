@@ -94,56 +94,74 @@ final class LaravelAiRouterTextGateway implements Gateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
-        $startedAt = microtime(true);
         $payloadMessages = $this->mapMessages($instructions, $messages);
         $estimatedTokens = $this->estimateTokens($payloadMessages, $this->maxOutputTokens($options));
-        $route = null;
+        $excludedKeyIds = [];
+        $lastException = null;
+        $lastCategory = 'unknown';
+        $maxAttempts = $this->maxAttempts();
 
-        try {
-            $route = $this->router->route($model, $estimatedTokens, requiresTools: $tools !== []);
-            $this->rateLimits->recordRequest($route->platform, $route->modelId, $route->keyId);
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $startedAt = microtime(true);
+            $route = null;
 
-            $data = $this->adapters
-                ->for($route->platform)
-                ->complete($route->apiKey, $payloadMessages, $route->modelId, $this->mapOptions($provider, $options, $schema, $tools), $timeout);
+            try {
+                $route = $this->router->route($model, $estimatedTokens, requiresTools: $tools !== [], excludedKeyIds: $excludedKeyIds);
+                $this->rateLimits->recordRequest($route->platform, $route->modelId, $route->keyId);
 
-            $response = $this->processCompletionResponse(
-                data: $data,
-                provider: $provider,
-                route: $route,
-                tools: $tools,
-                schema: $schema,
-                options: $options,
-                payloadMessages: $payloadMessages,
-                steps: new Collection,
-                responseMessages: new Collection,
-                timeout: $timeout,
-            );
+                $data = $this->adapters
+                    ->for($route->platform)
+                    ->complete($route->apiKey, $payloadMessages, $route->modelId, $this->mapOptions($provider, $options, $schema, $tools), $timeout);
 
-            $inputTokens = $response->usage->promptTokens;
-            $outputTokens = $response->usage->completionTokens;
-            $totalTokens = $inputTokens + $outputTokens;
+                $response = $this->processCompletionResponse(
+                    data: $data,
+                    provider: $provider,
+                    route: $route,
+                    tools: $tools,
+                    schema: $schema,
+                    options: $options,
+                    payloadMessages: $payloadMessages,
+                    steps: new Collection,
+                    responseMessages: new Collection,
+                    timeout: $timeout,
+                );
 
-            $this->rateLimits->recordTokens($route->platform, $route->modelId, $route->keyId, $totalTokens);
-            $this->router->recordSuccess($route);
-            $this->usageLogger->success($route, $inputTokens, $outputTokens, $this->latencyMs($startedAt));
+                $inputTokens = $response->usage->promptTokens;
+                $outputTokens = $response->usage->completionTokens;
+                $totalTokens = $inputTokens + $outputTokens;
 
-            return $response;
-        } catch (Throwable $exception) {
-            $category = $this->errorCategory($exception);
-            $this->usageLogger->error($route, $exception, $category, $this->latencyMs($startedAt));
+                $this->rateLimits->recordTokens($route->platform, $route->modelId, $route->keyId, $totalTokens);
+                $this->router->recordSuccess($route);
+                $this->usageLogger->success($route, $inputTokens, $outputTokens, $this->latencyMs($startedAt), $attempt);
 
-            if ($route instanceof RouteResult && $category === 'auth') {
-                $this->router->recordAuthFailure($route);
+                return $response;
+            } catch (Throwable $exception) {
+                if (! $route instanceof RouteResult && $lastException instanceof Throwable) {
+                    throw $this->mapExceptionForSdk($lastException, $provider, $lastCategory);
+                }
+
+                $category = $this->errorCategory($exception);
+                $this->usageLogger->error($route, $exception, $category, $this->latencyMs($startedAt), $attempt);
+
+                if ($route instanceof RouteResult) {
+                    $this->recordFailedRoute($route, $category);
+                    $excludedKeyIds = $this->excludeKey($excludedKeyIds, $route->keyId);
+                }
+
+                $lastException = $exception;
+                $lastCategory = $category;
+
+                if (! $this->canRetryInternally($route, $category, $attempt, $maxAttempts)) {
+                    throw $this->mapExceptionForSdk($exception, $provider, $category);
+                }
             }
-
-            if ($route instanceof RouteResult && $this->shouldCooldownRoute($category)) {
-                $this->rateLimits->setCooldown($route->platform, $route->modelId, $route->keyId, (int) config('laravel-ai-router.routing.cooldown_seconds', 120));
-                $this->router->recordRetryableFailure($route);
-            }
-
-            throw $this->mapExceptionForSdk($exception, $provider, $category);
         }
+
+        if ($lastException instanceof Throwable) {
+            throw $this->mapExceptionForSdk($lastException, $provider, $lastCategory);
+        }
+
+        throw new RuntimeException('Laravel AI Router could not complete the request.');
     }
 
     /**
@@ -168,10 +186,12 @@ final class LaravelAiRouterTextGateway implements Gateway
             throw new LogicException('Laravel AI Router does not support streaming tool calls yet.');
         }
 
-        $startedAt = microtime(true);
         $payloadMessages = $this->mapMessages($instructions, $messages);
         $estimatedTokens = $this->estimateTokens($payloadMessages, $this->maxOutputTokens($options));
-        $route = null;
+        $excludedKeyIds = [];
+        $lastException = null;
+        $lastCategory = 'unknown';
+        $maxAttempts = $this->maxAttempts();
         $messageId = $this->eventId();
         $streamStarted = false;
         $textStarted = false;
@@ -182,92 +202,108 @@ final class LaravelAiRouterTextGateway implements Gateway
         $outputTokens = 0;
         $totalTokens = 0;
 
-        try {
-            $route = $this->router->route($model, $estimatedTokens);
-            $this->rateLimits->recordRequest($route->platform, $route->modelId, $route->keyId);
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $startedAt = microtime(true);
+            $route = null;
 
-            foreach ($this->adapters->for($route->platform)->stream($route->apiKey, $payloadMessages, $route->modelId, $this->mapOptions($provider, $options, $schema), $timeout) as $chunk) {
-                if (isset($chunk['error'])) {
-                    throw new RuntimeException((string) data_get($chunk, 'error.message', 'Laravel AI Router streaming error.'));
-                }
+            try {
+                $route = $this->router->route($model, $estimatedTokens, excludedKeyIds: $excludedKeyIds);
+                $this->rateLimits->recordRequest($route->platform, $route->modelId, $route->keyId);
 
-                if (! $streamStarted) {
-                    $streamStarted = true;
-
-                    yield (new StreamStart(
-                        $this->eventId(),
-                        $this->providerName($provider),
-                        $route->modelId,
-                        time(),
-                    ))->withInvocationId($invocationId);
-                }
-
-                $usage = $this->streamUsage($chunk);
-                if ($usage !== null) {
-                    $inputTokens = $usage['input_tokens'];
-                    $outputTokens = $usage['output_tokens'];
-                    $totalTokens = $usage['total_tokens'];
-                }
-
-                $delta = $this->streamDelta($chunk);
-                if ($delta !== '') {
-                    if (! $textStarted) {
-                        $textStarted = true;
-
-                        yield (new TextStart($this->eventId(), $messageId, time()))->withInvocationId($invocationId);
+                foreach ($this->adapters->for($route->platform)->stream($route->apiKey, $payloadMessages, $route->modelId, $this->mapOptions($provider, $options, $schema), $timeout) as $chunk) {
+                    if (isset($chunk['error'])) {
+                        throw new RuntimeException((string) data_get($chunk, 'error.message', 'Laravel AI Router streaming error.'));
                     }
 
-                    $currentText .= $delta;
+                    if (! $streamStarted) {
+                        $streamStarted = true;
 
-                    yield (new TextDelta($this->eventId(), $messageId, $delta, time()))->withInvocationId($invocationId);
-                }
+                        yield (new StreamStart(
+                            $this->eventId(),
+                            $this->providerName($provider),
+                            $route->modelId,
+                            time(),
+                        ))->withInvocationId($invocationId);
+                    }
 
-                $chunkFinishReason = $this->streamFinishReason($chunk);
-                if ($chunkFinishReason !== null) {
-                    $finishReason = $chunkFinishReason;
+                    $usage = $this->streamUsage($chunk);
+                    if ($usage !== null) {
+                        $inputTokens = $usage['input_tokens'];
+                        $outputTokens = $usage['output_tokens'];
+                        $totalTokens = $usage['total_tokens'];
+                    }
 
-                    if ($textStarted && ! $textEnded) {
-                        $textEnded = true;
+                    $delta = $this->streamDelta($chunk);
+                    if ($delta !== '') {
+                        if (! $textStarted) {
+                            $textStarted = true;
 
-                        yield (new TextEnd($this->eventId(), $messageId, time()))->withInvocationId($invocationId);
+                            yield (new TextStart($this->eventId(), $messageId, time()))->withInvocationId($invocationId);
+                        }
+
+                        $currentText .= $delta;
+
+                        yield (new TextDelta($this->eventId(), $messageId, $delta, time()))->withInvocationId($invocationId);
+                    }
+
+                    $chunkFinishReason = $this->streamFinishReason($chunk);
+                    if ($chunkFinishReason !== null) {
+                        $finishReason = $chunkFinishReason;
+
+                        if ($textStarted && ! $textEnded) {
+                            $textEnded = true;
+
+                            yield (new TextEnd($this->eventId(), $messageId, time()))->withInvocationId($invocationId);
+                        }
                     }
                 }
+
+                if ($textStarted && ! $textEnded) {
+                    yield (new TextEnd($this->eventId(), $messageId, time()))->withInvocationId($invocationId);
+                }
+
+                if ($inputTokens === 0 && $outputTokens === 0) {
+                    $inputTokens = $this->estimateTokens($payloadMessages, 0);
+                    $outputTokens = max(0, (int) ceil(strlen($currentText) / 4));
+                    $totalTokens = $inputTokens + $outputTokens;
+                }
+
+                $this->rateLimits->recordTokens($route->platform, $route->modelId, $route->keyId, $totalTokens);
+                $this->router->recordSuccess($route);
+                $this->usageLogger->success($route, $inputTokens, $outputTokens, $this->latencyMs($startedAt), $attempt);
+
+                yield (new StreamEnd(
+                    $this->eventId(),
+                    $finishReason,
+                    new Usage($inputTokens, $outputTokens),
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                return;
+            } catch (Throwable $exception) {
+                if (! $route instanceof RouteResult && $lastException instanceof Throwable) {
+                    throw $this->mapExceptionForSdk($lastException, $provider, $lastCategory);
+                }
+
+                $category = $this->errorCategory($exception);
+                $this->usageLogger->error($route, $exception, $category, $this->latencyMs($startedAt), $attempt);
+
+                if ($route instanceof RouteResult) {
+                    $this->recordFailedRoute($route, $category);
+                    $excludedKeyIds = $this->excludeKey($excludedKeyIds, $route->keyId);
+                }
+
+                $lastException = $exception;
+                $lastCategory = $category;
+
+                if ($streamStarted || ! $this->canRetryInternally($route, $category, $attempt, $maxAttempts)) {
+                    throw $this->mapExceptionForSdk($exception, $provider, $category);
+                }
             }
+        }
 
-            if ($textStarted && ! $textEnded) {
-                yield (new TextEnd($this->eventId(), $messageId, time()))->withInvocationId($invocationId);
-            }
-
-            if ($inputTokens === 0 && $outputTokens === 0) {
-                $inputTokens = $this->estimateTokens($payloadMessages, 0);
-                $outputTokens = max(0, (int) ceil(strlen($currentText) / 4));
-                $totalTokens = $inputTokens + $outputTokens;
-            }
-
-            $this->rateLimits->recordTokens($route->platform, $route->modelId, $route->keyId, $totalTokens);
-            $this->router->recordSuccess($route);
-            $this->usageLogger->success($route, $inputTokens, $outputTokens, $this->latencyMs($startedAt));
-
-            yield (new StreamEnd(
-                $this->eventId(),
-                $finishReason,
-                new Usage($inputTokens, $outputTokens),
-                time(),
-            ))->withInvocationId($invocationId);
-        } catch (Throwable $exception) {
-            $category = $this->errorCategory($exception);
-            $this->usageLogger->error($route, $exception, $category, $this->latencyMs($startedAt));
-
-            if ($route instanceof RouteResult && $category === 'auth') {
-                $this->router->recordAuthFailure($route);
-            }
-
-            if ($route instanceof RouteResult && $this->shouldCooldownRoute($category)) {
-                $this->rateLimits->setCooldown($route->platform, $route->modelId, $route->keyId, (int) config('laravel-ai-router.routing.cooldown_seconds', 120));
-                $this->router->recordRetryableFailure($route);
-            }
-
-            throw $this->mapExceptionForSdk($exception, $provider, $category);
+        if ($lastException instanceof Throwable) {
+            throw $this->mapExceptionForSdk($lastException, $provider, $lastCategory);
         }
     }
 
@@ -860,6 +896,52 @@ final class LaravelAiRouterTextGateway implements Gateway
     private function latencyMs(float $startedAt): int
     {
         return (int) round((microtime(true) - $startedAt) * 1000);
+    }
+
+    /**
+     * Resolve the bounded number of internal provider attempts for one routed request.
+     */
+    private function maxAttempts(): int
+    {
+        return max(1, min(50, (int) config('laravel-ai-router.routing.max_attempts', 1)));
+    }
+
+    /**
+     * Apply local health state after a route-specific failure.
+     */
+    private function recordFailedRoute(RouteResult $route, string $category): void
+    {
+        if ($category === 'auth') {
+            $this->router->recordAuthFailure($route);
+        }
+
+        if ($this->shouldCooldownRoute($category)) {
+            $this->rateLimits->setCooldown($route->platform, $route->modelId, $route->keyId, (int) config('laravel-ai-router.routing.cooldown_seconds', 120));
+            $this->router->recordRetryableFailure($route);
+        }
+    }
+
+    /**
+     * Determine whether the current provider failure can try another internal route.
+     */
+    private function canRetryInternally(?RouteResult $route, string $category, int $attempt, int $maxAttempts): bool
+    {
+        return $route instanceof RouteResult
+            && $attempt < $maxAttempts
+            && in_array($category, ['auth', 'rate_limit', 'insufficient_credits', 'timeout', 'server'], true);
+    }
+
+    /**
+     * Add a provider key to the per-request exclusion list without duplicates.
+     *
+     * @param  array<int, int>  $excludedKeyIds
+     * @return array<int, int>
+     */
+    private function excludeKey(array $excludedKeyIds, int $keyId): array
+    {
+        $excludedKeyIds[] = $keyId;
+
+        return array_values(array_unique($excludedKeyIds));
     }
 
     /**

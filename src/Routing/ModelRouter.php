@@ -27,8 +27,10 @@ final class ModelRouter
 
     /**
      * Select an eligible provider key and model for the requested model identifier and token/tool requirements.
+     *
+     * @param  array<int, int>  $excludedKeyIds
      */
-    public function route(?string $modelId = 'auto', int $estimatedTokens = 1000, bool $requiresTools = false): RouteResult
+    public function route(?string $modelId = 'auto', int $estimatedTokens = 1000, bool $requiresTools = false, array $excludedKeyIds = []): RouteResult
     {
         if ($modelId !== null && $modelId !== '' && $modelId !== 'auto') {
             $models = LaravelAiRouterModel::query()
@@ -46,7 +48,7 @@ final class ModelRouter
                     continue;
                 }
 
-                $key = $this->firstUsableKey($model, $estimatedTokens, $requiresTools);
+                $key = $this->firstUsableKey($model, $estimatedTokens, $requiresTools, $excludedKeyIds);
 
                 if ($key instanceof LaravelAiRouterProviderKey) {
                     return $this->toResult($model, $key);
@@ -72,7 +74,7 @@ final class ModelRouter
                 continue;
             }
 
-            $key = $this->firstUsableKey($model, $estimatedTokens, $requiresTools);
+            $key = $this->firstUsableKey($model, $estimatedTokens, $requiresTools, $excludedKeyIds);
 
             if (! $key instanceof LaravelAiRouterProviderKey) {
                 continue;
@@ -140,8 +142,10 @@ final class ModelRouter
 
     /**
      * Return the first enabled non-invalid provider key that is not currently in cooldown for the model.
+     *
+     * @param  array<int, int>  $excludedKeyIds
      */
-    private function firstUsableKey(LaravelAiRouterModel $model, int $estimatedTokens, bool $requiresTools): ?LaravelAiRouterProviderKey
+    private function firstUsableKey(LaravelAiRouterModel $model, int $estimatedTokens, bool $requiresTools, array $excludedKeyIds): ?LaravelAiRouterProviderKey
     {
         $keys = LaravelAiRouterProviderKey::query()
             ->where('platform', $model->platform)
@@ -152,6 +156,10 @@ final class ModelRouter
             ->get();
 
         foreach ($keys as $key) {
+            if (in_array((int) $key->getKey(), $excludedKeyIds, true)) {
+                continue;
+            }
+
             if (! $this->keySupportsModel($key, $model, $requiresTools)) {
                 continue;
             }

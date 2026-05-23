@@ -1,13 +1,13 @@
 {
-    "name": "ferdiunal/ai-dev-api",
-    "description": "Laravel AI SDK AI Dev API text provider with local key/model routing.",
+    "name": "ferdiunal/laravel-ai-router",
+    "description": "Laravel AI SDK Laravel AI Router text provider with local key/model routing.",
     "keywords": [
         "ai",
-        "ai-dev-api",
+        "laravel-ai-router",
         "laravel",
         "laravel-ai"
     ],
-    "homepage": "https://github.com/ferdiunal/ai-dev-api",
+    "homepage": "https://github.com/ferdiunal/laravel-ai-router",
     "license": "MIT",
     "authors": [
         {
@@ -37,12 +37,12 @@
     },
     "autoload": {
         "psr-4": {
-            "Ferdiunal\\AiDevApi\\": "src/"
+            "Ferdiunal\\LaravelAiRouter\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Ferdiunal\\AiDevApi\\Tests\\": "tests/"
+            "Ferdiunal\\LaravelAiRouter\\Tests\\": "tests/"
         }
     },
     "scripts": {
@@ -60,7 +60,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Ferdiunal\\AiDevApi\\AiDevApiServiceProvider"
+                "Ferdiunal\\LaravelAiRouter\\LaravelAiRouterServiceProvider"
             ]
         }
     },

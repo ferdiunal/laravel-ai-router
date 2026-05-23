@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Routing;
+namespace Ferdiunal\LaravelAiRouter\Routing;
 
-use Ferdiunal\AiDevApi\Adapters\ProviderAdapterRegistry;
-use Ferdiunal\AiDevApi\Exceptions\ModelNotFoundException;
-use Ferdiunal\AiDevApi\Exceptions\NoAvailableModelException;
-use Ferdiunal\AiDevApi\Models\AiDevApiFallback;
-use Ferdiunal\AiDevApi\Models\AiDevApiModel;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderModelCache;
+use Ferdiunal\LaravelAiRouter\Adapters\ProviderAdapterRegistry;
+use Ferdiunal\LaravelAiRouter\Exceptions\ModelNotFoundException;
+use Ferdiunal\LaravelAiRouter\Exceptions\NoAvailableModelException;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterFallback;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterModel;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderModelCache;
 
 /**
  * Selects the best eligible provider key and model for a requested Laravel AI text operation.
  */
-final class AiDevApiRouter
+final class ModelRouter
 {
     /**
      * Initialize the router with adapter availability checks and rate-window state.
@@ -31,7 +31,7 @@ final class AiDevApiRouter
     public function route(?string $modelId = 'auto', int $estimatedTokens = 1000, bool $requiresTools = false): RouteResult
     {
         if ($modelId !== null && $modelId !== '' && $modelId !== 'auto') {
-            $models = AiDevApiModel::query()
+            $models = LaravelAiRouterModel::query()
                 ->where('model_id', $modelId)
                 ->where('enabled', true)
                 ->orderBy('id')
@@ -48,7 +48,7 @@ final class AiDevApiRouter
 
                 $key = $this->firstUsableKey($model, $estimatedTokens, $requiresTools);
 
-                if ($key instanceof AiDevApiProviderKey) {
+                if ($key instanceof LaravelAiRouterProviderKey) {
                     return $this->toResult($model, $key);
                 }
             }
@@ -56,32 +56,32 @@ final class AiDevApiRouter
             throw new NoAvailableModelException("No enabled valid key is available for model [{$modelId}].");
         }
 
-        $fallbacks = AiDevApiFallback::query()
+        $fallbacks = LaravelAiRouterFallback::query()
             ->where('enabled', true)
             ->orderByRaw('(priority + penalty) asc')
             ->orderBy('id')
             ->get();
 
         foreach ($fallbacks as $fallback) {
-            $model = AiDevApiModel::query()
-                ->whereKey($fallback->ai_dev_api_model_id)
+            $model = LaravelAiRouterModel::query()
+                ->whereKey($fallback->laravel_ai_router_model_id)
                 ->where('enabled', true)
                 ->first();
 
-            if (! $model instanceof AiDevApiModel || ! $this->adapters->has($model->platform)) {
+            if (! $model instanceof LaravelAiRouterModel || ! $this->adapters->has($model->platform)) {
                 continue;
             }
 
             $key = $this->firstUsableKey($model, $estimatedTokens, $requiresTools);
 
-            if (! $key instanceof AiDevApiProviderKey) {
+            if (! $key instanceof LaravelAiRouterProviderKey) {
                 continue;
             }
 
             return $this->toResult($model, $key);
         }
 
-        throw new NoAvailableModelException('All AI Dev API models are exhausted. Add an enabled provider key or wait for limits to reset.');
+        throw new NoAvailableModelException('All Laravel AI Router models are exhausted. Add an enabled provider key or wait for limits to reset.');
     }
 
     /**
@@ -89,16 +89,16 @@ final class AiDevApiRouter
      */
     public function recordRetryableFailure(RouteResult $route): void
     {
-        $fallback = AiDevApiFallback::query()->where('ai_dev_api_model_id', $route->modelDbId)->first();
+        $fallback = LaravelAiRouterFallback::query()->where('laravel_ai_router_model_id', $route->modelDbId)->first();
 
-        if (! $fallback instanceof AiDevApiFallback) {
+        if (! $fallback instanceof LaravelAiRouterFallback) {
             return;
         }
 
         $fallback->forceFill([
             'penalty' => min(
-                (int) config('ai-dev-api.routing.max_penalty', 10),
-                ((int) $fallback->penalty) + (int) config('ai-dev-api.routing.penalty_per_retryable_failure', 3),
+                (int) config('laravel-ai-router.routing.max_penalty', 10),
+                ((int) $fallback->penalty) + (int) config('laravel-ai-router.routing.penalty_per_retryable_failure', 3),
             ),
             'penalty_updated_at' => now(),
         ])->save();
@@ -109,9 +109,9 @@ final class AiDevApiRouter
      */
     public function recordSuccess(RouteResult $route): void
     {
-        $fallback = AiDevApiFallback::query()->where('ai_dev_api_model_id', $route->modelDbId)->first();
+        $fallback = LaravelAiRouterFallback::query()->where('laravel_ai_router_model_id', $route->modelDbId)->first();
 
-        if (! $fallback instanceof AiDevApiFallback || (int) $fallback->penalty === 0) {
+        if (! $fallback instanceof LaravelAiRouterFallback || (int) $fallback->penalty === 0) {
             return;
         }
 
@@ -126,9 +126,9 @@ final class AiDevApiRouter
      */
     public function recordAuthFailure(RouteResult $route): void
     {
-        $key = AiDevApiProviderKey::query()->find($route->keyId);
+        $key = LaravelAiRouterProviderKey::query()->find($route->keyId);
 
-        if (! $key instanceof AiDevApiProviderKey) {
+        if (! $key instanceof LaravelAiRouterProviderKey) {
             return;
         }
 
@@ -141,9 +141,9 @@ final class AiDevApiRouter
     /**
      * Return the first enabled non-invalid provider key that is not currently in cooldown for the model.
      */
-    private function firstUsableKey(AiDevApiModel $model, int $estimatedTokens, bool $requiresTools): ?AiDevApiProviderKey
+    private function firstUsableKey(LaravelAiRouterModel $model, int $estimatedTokens, bool $requiresTools): ?LaravelAiRouterProviderKey
     {
-        $keys = AiDevApiProviderKey::query()
+        $keys = LaravelAiRouterProviderKey::query()
             ->where('platform', $model->platform)
             ->where('enabled', true)
             ->where('status', '!=', 'invalid')
@@ -184,9 +184,9 @@ final class AiDevApiRouter
     /**
      * Determine whether a provider key exposes a healthy non-expired cache row for the requested model.
      */
-    private function keySupportsModel(AiDevApiProviderKey $key, AiDevApiModel $model, bool $requiresTools): bool
+    private function keySupportsModel(LaravelAiRouterProviderKey $key, LaravelAiRouterModel $model, bool $requiresTools): bool
     {
-        $hasCacheRows = AiDevApiProviderModelCache::query()
+        $hasCacheRows = LaravelAiRouterProviderModelCache::query()
             ->where('provider_key_id', $key->getKey())
             ->exists();
 
@@ -198,7 +198,7 @@ final class AiDevApiRouter
             return false;
         }
 
-        $cacheQuery = AiDevApiProviderModelCache::query()
+        $cacheQuery = LaravelAiRouterProviderModelCache::query()
             ->where('provider_key_id', $key->getKey())
             ->where('model_id', $model->model_id)
             ->where('enabled', true)
@@ -217,7 +217,7 @@ final class AiDevApiRouter
     /**
      * Build the immutable route result object from a model row and provider key row.
      */
-    private function toResult(AiDevApiModel $model, AiDevApiProviderKey $key): RouteResult
+    private function toResult(LaravelAiRouterModel $model, LaravelAiRouterProviderKey $key): RouteResult
     {
         $key->forceFill(['last_used_at' => now()])->save();
 

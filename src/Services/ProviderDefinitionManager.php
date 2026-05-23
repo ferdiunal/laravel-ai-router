@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Services;
+namespace Ferdiunal\LaravelAiRouter\Services;
 
-use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
-use Ferdiunal\AiDevApi\Models\AiDevApiFallback;
-use Ferdiunal\AiDevApi\Models\AiDevApiModel;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderDefinition;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderModelCache;
-use Ferdiunal\AiDevApi\Support\ProviderDefinitionValidator;
+use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterFallback;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterModel;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderDefinition;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderModelCache;
+use Ferdiunal\LaravelAiRouter\Support\ProviderDefinitionValidator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -31,7 +31,7 @@ final class ProviderDefinitionManager
         array $headers = [],
         int $timeoutMs = 15_000,
         bool $requiresPlaceholderKey = false,
-    ): AiDevApiProviderDefinition {
+    ): LaravelAiRouterProviderDefinition {
         $platform = trim($platform);
         $name = trim($name);
 
@@ -61,7 +61,7 @@ final class ProviderDefinitionManager
             $errors['platform'] = "Provider platform [{$platform}] already exists in the active provider catalog.";
         }
 
-        if (AiDevApiProviderDefinition::query()->where('platform', $platform)->exists()) {
+        if (LaravelAiRouterProviderDefinition::query()->where('platform', $platform)->exists()) {
             $errors['platform'] = "Provider platform [{$platform}] already exists.";
         }
 
@@ -81,7 +81,7 @@ final class ProviderDefinitionManager
             throw ValidationException::withMessages(['base_url' => 'Provider definition is invalid.']);
         }
 
-        return AiDevApiProviderDefinition::query()->create([
+        return LaravelAiRouterProviderDefinition::query()->create([
             'platform' => $platform,
             'name' => $definition['name'],
             'adapter' => 'openai-compatible',
@@ -98,9 +98,9 @@ final class ProviderDefinitionManager
      */
     public function remove(int $id): bool
     {
-        return DB::connection(config('ai-dev-api.database.connection') ?: 'ai-dev-api')->transaction(function () use ($id): bool {
-            $definition = AiDevApiProviderDefinition::query()->find($id);
-            if (! $definition instanceof AiDevApiProviderDefinition) {
+        return DB::connection(config('laravel-ai-router.database.connection') ?: 'laravel-ai-router')->transaction(function () use ($id): bool {
+            $definition = LaravelAiRouterProviderDefinition::query()->find($id);
+            if (! $definition instanceof LaravelAiRouterProviderDefinition) {
                 return false;
             }
 
@@ -113,10 +113,10 @@ final class ProviderDefinitionManager
     /**
      * Enable or disable a runtime custom provider definition by its package database primary key.
      */
-    public function setEnabled(int $id, bool $enabled): AiDevApiProviderDefinition
+    public function setEnabled(int $id, bool $enabled): LaravelAiRouterProviderDefinition
     {
-        return DB::connection(config('ai-dev-api.database.connection') ?: 'ai-dev-api')->transaction(function () use ($id, $enabled): AiDevApiProviderDefinition {
-            $definition = AiDevApiProviderDefinition::query()->findOrFail($id);
+        return DB::connection(config('laravel-ai-router.database.connection') ?: 'laravel-ai-router')->transaction(function () use ($id, $enabled): LaravelAiRouterProviderDefinition {
+            $definition = LaravelAiRouterProviderDefinition::query()->findOrFail($id);
             $definition->forceFill(['enabled' => $enabled])->save();
 
             if (! $enabled) {
@@ -132,26 +132,26 @@ final class ProviderDefinitionManager
      */
     private function deactivateRuntimeArtifacts(string $platform): void
     {
-        $modelIds = AiDevApiModel::query()
+        $modelIds = LaravelAiRouterModel::query()
             ->where('platform', $platform)
             ->pluck('id')
             ->all();
 
         if ($modelIds !== []) {
-            AiDevApiFallback::query()
-                ->whereIn('ai_dev_api_model_id', $modelIds)
+            LaravelAiRouterFallback::query()
+                ->whereIn('laravel_ai_router_model_id', $modelIds)
                 ->update(['enabled' => false]);
         }
 
-        AiDevApiProviderKey::query()
+        LaravelAiRouterProviderKey::query()
             ->where('platform', $platform)
             ->update(['enabled' => false]);
 
-        AiDevApiProviderModelCache::query()
+        LaravelAiRouterProviderModelCache::query()
             ->where('platform', $platform)
             ->update(['enabled' => false]);
 
-        AiDevApiModel::query()
+        LaravelAiRouterModel::query()
             ->where('platform', $platform)
             ->update(['enabled' => false]);
     }

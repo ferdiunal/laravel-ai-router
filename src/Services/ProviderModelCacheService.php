@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Services;
+namespace Ferdiunal\LaravelAiRouter\Services;
 
-use Ferdiunal\AiDevApi\Adapters\ProviderAdapterRegistry;
-use Ferdiunal\AiDevApi\Catalog\ModelCatalog;
-use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
-use Ferdiunal\AiDevApi\Exceptions\ProviderAuthenticationException;
-use Ferdiunal\AiDevApi\Models\AiDevApiFallback;
-use Ferdiunal\AiDevApi\Models\AiDevApiModel;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderModelCache;
+use Ferdiunal\LaravelAiRouter\Adapters\ProviderAdapterRegistry;
+use Ferdiunal\LaravelAiRouter\Catalog\ModelCatalog;
+use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
+use Ferdiunal\LaravelAiRouter\Exceptions\ProviderAuthenticationException;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterFallback;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterModel;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderModelCache;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Throwable;
@@ -29,9 +29,9 @@ final class ProviderModelCacheService
     /**
      * Refresh the free-model cache for a provider key using live provider data or curated fallback rows when safe.
      *
-     * @return array<int, AiDevApiProviderModelCache>
+     * @return array<int, LaravelAiRouterProviderModelCache>
      */
-    public function refreshForKey(AiDevApiProviderKey $key): array
+    public function refreshForKey(LaravelAiRouterProviderKey $key): array
     {
         $models = [];
         $source = 'live';
@@ -66,7 +66,7 @@ final class ProviderModelCacheService
 
         $rows = [];
         foreach ($models as $model) {
-            $rows[] = AiDevApiProviderModelCache::query()->updateOrCreate(
+            $rows[] = LaravelAiRouterProviderModelCache::query()->updateOrCreate(
                 [
                     'provider_key_id' => $key->getKey(),
                     'model_id' => $model['model_id'],
@@ -93,7 +93,7 @@ final class ProviderModelCacheService
 
         $key->forceFill([
             'models_cached_at' => now(),
-            'models_cache_expires_at' => now()->addMinutes((int) config('ai-dev-api.models.cache_ttl_minutes', 1440)),
+            'models_cache_expires_at' => now()->addMinutes((int) config('laravel-ai-router.models.cache_ttl_minutes', 1440)),
             'last_checked_at' => now(),
         ])->save();
 
@@ -112,7 +112,7 @@ final class ProviderModelCacheService
         try {
             $routablePlatforms = $this->routablePlatforms();
 
-            $query = AiDevApiProviderModelCache::query()
+            $query = LaravelAiRouterProviderModelCache::query()
                 ->where('enabled', true)
                 ->where('is_free', true)
                 ->whereIn('platform', $routablePlatforms)
@@ -159,7 +159,7 @@ final class ProviderModelCacheService
      */
     public function firstAvailableModelId(): ?string
     {
-        return AiDevApiModel::query()
+        return LaravelAiRouterModel::query()
             ->where('enabled', true)
             ->whereIn('platform', $this->routablePlatforms())
             ->orderBy('intelligence_rank')
@@ -178,7 +178,7 @@ final class ProviderModelCacheService
     /**
      * Return the number of currently exposed cached free models for a healthy provider key.
      */
-    public function cachedCountForKey(AiDevApiProviderKey $key): int
+    public function cachedCountForKey(LaravelAiRouterProviderKey $key): int
     {
         if (! $this->keyCanExposeCachedModels($key)) {
             return 0;
@@ -190,16 +190,16 @@ final class ProviderModelCacheService
     /**
      * Return filtered cached free model rows for a routable, enabled, non-invalid, non-expired provider key.
      *
-     * @return array<int, AiDevApiProviderModelCache>
+     * @return array<int, LaravelAiRouterProviderModelCache>
      */
-    public function cachedModelsForKey(AiDevApiProviderKey $key): array
+    public function cachedModelsForKey(LaravelAiRouterProviderKey $key): array
     {
         if (! $this->keyCanExposeCachedModels($key)) {
             return [];
         }
 
         try {
-            return AiDevApiProviderModelCache::query()
+            return LaravelAiRouterProviderModelCache::query()
                 ->where('provider_key_id', $key->getKey())
                 ->where('platform', $key->platform)
                 ->where('provider_label', $key->label)
@@ -218,7 +218,7 @@ final class ProviderModelCacheService
      *
      * @return array<string, string>
      */
-    public function choicesForKey(AiDevApiProviderKey $key, bool $includeAuto = true): array
+    public function choicesForKey(LaravelAiRouterProviderKey $key, bool $includeAuto = true): array
     {
         $choices = $includeAuto ? ['auto' => 'Auto — route requests across healthy cached free models'] : [];
 
@@ -288,10 +288,10 @@ final class ProviderModelCacheService
             return;
         }
 
-        $nextPriority = ((int) AiDevApiFallback::query()->max('priority')) + 1;
+        $nextPriority = ((int) LaravelAiRouterFallback::query()->max('priority')) + 1;
 
         foreach ($models as $model) {
-            $row = AiDevApiModel::query()->updateOrCreate(
+            $row = LaravelAiRouterModel::query()->updateOrCreate(
                 [
                     'platform' => $platform,
                     'model_id' => $model['model_id'],
@@ -310,8 +310,8 @@ final class ProviderModelCacheService
                 ],
             );
 
-            $fallback = AiDevApiFallback::query()->firstOrNew([
-                'ai_dev_api_model_id' => $row->getKey(),
+            $fallback = LaravelAiRouterFallback::query()->firstOrNew([
+                'laravel_ai_router_model_id' => $row->getKey(),
             ]);
 
             if (! $fallback->exists) {
@@ -354,7 +354,7 @@ final class ProviderModelCacheService
     /**
      * Persist provider-key invalidation metadata after an authentication failure.
      */
-    private function markKeyInvalid(AiDevApiProviderKey $key): void
+    private function markKeyInvalid(LaravelAiRouterProviderKey $key): void
     {
         $key->forceFill([
             'status' => 'invalid',
@@ -365,7 +365,7 @@ final class ProviderModelCacheService
     /**
      * Determine whether a provider key is allowed to expose cached free models to routing or default selection.
      */
-    private function keyCanExposeCachedModels(AiDevApiProviderKey $key): bool
+    private function keyCanExposeCachedModels(LaravelAiRouterProviderKey $key): bool
     {
         if (! in_array($key->platform, $this->routablePlatforms(), true)) {
             return false;
@@ -381,9 +381,9 @@ final class ProviderModelCacheService
     /**
      * Disable existing model cache rows for a provider key before writing a refreshed cache set.
      */
-    private function disableCacheRows(AiDevApiProviderKey $key): void
+    private function disableCacheRows(LaravelAiRouterProviderKey $key): void
     {
-        AiDevApiProviderModelCache::query()
+        LaravelAiRouterProviderModelCache::query()
             ->where('provider_key_id', $key->getKey())
             ->update(['enabled' => false]);
     }

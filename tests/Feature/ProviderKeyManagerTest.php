@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
-use Ferdiunal\AiDevApi\Services\ProviderKeyManager;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
+use Ferdiunal\LaravelAiRouter\Services\ProviderKeyManager;
 use Illuminate\Validation\ValidationException;
 
-function migrateAiDevApiForProviderKeyTests(): void
+function migrateLaravelAiRouterForProviderKeyTests(): void
 {
     foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
@@ -15,9 +15,9 @@ function migrateAiDevApiForProviderKeyTests(): void
 }
 
 it('requires provider labels to be unique per provider', function () {
-    migrateAiDevApiForProviderKeyTests();
+    migrateLaravelAiRouterForProviderKeyTests();
 
-    AiDevApiProviderKey::query()->create([
+    LaravelAiRouterProviderKey::query()->create([
         'platform' => 'openrouter',
         'label' => 'Primary',
         'key' => 'key-openrouter-value-123456',

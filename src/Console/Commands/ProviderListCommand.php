@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Console\Commands;
+namespace Ferdiunal\LaravelAiRouter\Console\Commands;
 
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
-use Ferdiunal\AiDevApi\Services\ProviderModelCacheService;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
+use Ferdiunal\LaravelAiRouter\Services\ProviderModelCacheService;
 use Illuminate\Console\Command;
 
 use function Laravel\Prompts\table;
@@ -15,7 +15,7 @@ use function Laravel\Prompts\table;
  */
 final class ProviderListCommand extends Command
 {
-    protected $signature = 'ai-dev-api:provider:list';
+    protected $signature = 'laravel-ai-router:provider:list';
 
     protected $description = 'List provider API keys with masked API values.';
 
@@ -24,8 +24,8 @@ final class ProviderListCommand extends Command
      */
     public function handle(ProviderModelCacheService $modelCache): int
     {
-        $rows = AiDevApiProviderKey::query()->orderBy('platform')->orderBy('label')->get()
-            ->map(fn (AiDevApiProviderKey $key): array => [
+        $rows = LaravelAiRouterProviderKey::query()->orderBy('platform')->orderBy('label')->get()
+            ->map(fn (LaravelAiRouterProviderKey $key): array => [
                 (string) $key->getKey(),
                 $key->platform,
                 $key->label,

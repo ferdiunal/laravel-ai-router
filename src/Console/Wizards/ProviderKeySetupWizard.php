@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Console\Wizards;
+namespace Ferdiunal\LaravelAiRouter\Console\Wizards;
 
-use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
-use Ferdiunal\AiDevApi\Services\ModelPreferenceManager;
-use Ferdiunal\AiDevApi\Services\ProviderKeyManager;
-use Ferdiunal\AiDevApi\Services\ProviderModelCacheService;
+use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
+use Ferdiunal\LaravelAiRouter\Services\ModelPreferenceManager;
+use Ferdiunal\LaravelAiRouter\Services\ProviderKeyManager;
+use Ferdiunal\LaravelAiRouter\Services\ProviderModelCacheService;
 
 use function Laravel\Prompts\info;
 use function Laravel\Prompts\outro;
@@ -34,7 +34,7 @@ final class ProviderKeySetupWizard
     /**
      * Run the provider-key setup prompts, persist the key, refresh models, and store the selected default model.
      */
-    public function run(bool $interactive): AiDevApiProviderKey
+    public function run(bool $interactive): LaravelAiRouterProviderKey
     {
         $platform = $this->providerPrompt($interactive);
         $definition = ProviderCatalog::get($platform);

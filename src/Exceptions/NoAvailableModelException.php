@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Exceptions;
+namespace Ferdiunal\LaravelAiRouter\Exceptions;
 
 use RuntimeException;
 

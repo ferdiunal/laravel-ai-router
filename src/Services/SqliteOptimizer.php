@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Services;
+namespace Ferdiunal\LaravelAiRouter\Services;
 
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Facades\DB;
@@ -34,11 +34,11 @@ final class SqliteOptimizer
      */
     public function optimize(?string $connection = null): array
     {
-        if (! (bool) config('ai-dev-api.database.sqlite.optimize', true)) {
+        if (! (bool) config('laravel-ai-router.database.sqlite.optimize', true)) {
             return [];
         }
 
-        $connectionName = $connection ?: config('ai-dev-api.database.connection') ?: config('database.default');
+        $connectionName = $connection ?: config('laravel-ai-router.database.connection') ?: config('database.default');
         $db = DB::connection($connectionName);
 
         if ($db->getDriverName() !== 'sqlite') {
@@ -48,18 +48,18 @@ final class SqliteOptimizer
         $database = (string) config("database.connections.{$connectionName}.database", '');
         $statements = [
             'PRAGMA foreign_keys = ON',
-            'PRAGMA busy_timeout = '.$this->clampInt(config('ai-dev-api.database.sqlite.busy_timeout_ms', self::DEFAULT_BUSY_TIMEOUT_MS), 0, self::MAX_BUSY_TIMEOUT_MS),
-            'PRAGMA synchronous = '.$this->enumValue(config('ai-dev-api.database.sqlite.synchronous', 'NORMAL'), self::SYNCHRONOUS_MODES, 'NORMAL'),
+            'PRAGMA busy_timeout = '.$this->clampInt(config('laravel-ai-router.database.sqlite.busy_timeout_ms', self::DEFAULT_BUSY_TIMEOUT_MS), 0, self::MAX_BUSY_TIMEOUT_MS),
+            'PRAGMA synchronous = '.$this->enumValue(config('laravel-ai-router.database.sqlite.synchronous', 'NORMAL'), self::SYNCHRONOUS_MODES, 'NORMAL'),
             'PRAGMA temp_store = MEMORY',
         ];
 
-        $cacheSize = $this->clampInt(config('ai-dev-api.database.sqlite.cache_size_kb', self::DEFAULT_CACHE_SIZE_KB), 0, self::MAX_CACHE_SIZE_KB);
+        $cacheSize = $this->clampInt(config('laravel-ai-router.database.sqlite.cache_size_kb', self::DEFAULT_CACHE_SIZE_KB), 0, self::MAX_CACHE_SIZE_KB);
         if ($cacheSize > 0) {
             $statements[] = 'PRAGMA cache_size = -'.$cacheSize;
         }
 
         if ($database !== ':memory:') {
-            array_unshift($statements, 'PRAGMA journal_mode = '.$this->enumValue(config('ai-dev-api.database.sqlite.journal_mode', 'WAL'), self::JOURNAL_MODES, 'WAL'));
+            array_unshift($statements, 'PRAGMA journal_mode = '.$this->enumValue(config('laravel-ai-router.database.sqlite.journal_mode', 'WAL'), self::JOURNAL_MODES, 'WAL'));
         }
 
         return $this->apply($db, $statements);

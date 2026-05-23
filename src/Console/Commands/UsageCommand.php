@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Console\Commands;
+namespace Ferdiunal\LaravelAiRouter\Console\Commands;
 
-use Ferdiunal\AiDevApi\Services\UsageAnalyticsRepository;
+use Ferdiunal\LaravelAiRouter\Services\UsageAnalyticsRepository;
 use Illuminate\Console\Command;
 
 use function Laravel\Prompts\select;
@@ -15,9 +15,9 @@ use function Laravel\Prompts\table;
  */
 final class UsageCommand extends Command
 {
-    protected $signature = 'ai-dev-api:usage';
+    protected $signature = 'laravel-ai-router:usage';
 
-    protected $description = 'Show AI Dev API usage statistics.';
+    protected $description = 'Show Laravel AI Router usage statistics.';
 
     /**
      * Render the selected usage range as summary, provider-label, and model aggregate tables.

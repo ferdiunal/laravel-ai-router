@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Models;
+namespace Ferdiunal\LaravelAiRouter\Models;
 
 use Illuminate\Support\Carbon;
 
@@ -14,9 +14,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-final class AiDevApiSetting extends AiDevApiBaseModel
+final class LaravelAiRouterSetting extends LaravelAiRouterBaseModel
 {
-    protected $table = 'ai_dev_api_settings';
+    protected $table = 'laravel_ai_router_settings';
 
     protected $primaryKey = 'key';
 

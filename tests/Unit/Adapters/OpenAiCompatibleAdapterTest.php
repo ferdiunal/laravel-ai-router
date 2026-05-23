@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Adapters\OpenAiCompatibleAdapter;
+use Ferdiunal\LaravelAiRouter\Adapters\OpenAiCompatibleAdapter;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 

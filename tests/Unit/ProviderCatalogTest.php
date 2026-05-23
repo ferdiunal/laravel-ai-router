@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
+use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
 
-it('contains the active ai-dev-api provider platforms', function () {
+it('contains the active laravel-ai-router provider platforms', function () {
     expect(array_keys(ProviderCatalog::all()))->toBe([
         'google',
         'cloudflare',

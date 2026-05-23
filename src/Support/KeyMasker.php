@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Support;
+namespace Ferdiunal\LaravelAiRouter\Support;
 
 /**
  * Masks provider API keys before they are rendered in CLI output or serialized model attributes.

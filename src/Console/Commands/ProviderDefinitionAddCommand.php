@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Console\Commands;
+namespace Ferdiunal\LaravelAiRouter\Console\Commands;
 
-use Ferdiunal\AiDevApi\Console\Concerns\InteractsWithProviderPrompts;
-use Ferdiunal\AiDevApi\Services\ProviderDefinitionManager;
+use Ferdiunal\LaravelAiRouter\Console\Concerns\InteractsWithProviderPrompts;
+use Ferdiunal\LaravelAiRouter\Services\ProviderDefinitionManager;
 use Illuminate\Console\Command;
 use Illuminate\Validation\ValidationException;
 
@@ -20,7 +20,7 @@ final class ProviderDefinitionAddCommand extends Command
 {
     use InteractsWithProviderPrompts;
 
-    protected $signature = 'ai-dev-api:provider-definition:add';
+    protected $signature = 'laravel-ai-router:provider-definition:add';
 
     protected $description = 'Add a custom OpenAI-compatible provider definition using Laravel Prompts.';
 
@@ -38,7 +38,7 @@ final class ProviderDefinitionAddCommand extends Command
 
         $headers = json_decode($headersJson !== '' ? $headersJson : '{}', true);
         if (! is_array($headers)) {
-            warning('Invalid headers JSON. Use an object like {"X-Title":"AI Dev API"}.');
+            warning('Invalid headers JSON. Use an object like {"X-Title":"Laravel AI Router"}.');
 
             return self::FAILURE;
         }
@@ -61,7 +61,7 @@ final class ProviderDefinitionAddCommand extends Command
         }
 
         info("Added {$definition->platform} ({$definition->name}).");
-        outro('Custom provider definition saved. Add a provider key next with ai-dev-api:provider:add.');
+        outro('Custom provider definition saved. Add a provider key next with laravel-ai-router:provider:add.');
 
         return self::SUCCESS;
     }

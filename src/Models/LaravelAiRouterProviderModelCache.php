@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Models;
+namespace Ferdiunal\LaravelAiRouter\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -31,9 +31,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-final class AiDevApiProviderModelCache extends AiDevApiBaseModel
+final class LaravelAiRouterProviderModelCache extends LaravelAiRouterBaseModel
 {
-    protected $table = 'ai_dev_api_provider_model_caches';
+    protected $table = 'laravel_ai_router_provider_model_caches';
 
     protected $guarded = [];
 
@@ -60,10 +60,10 @@ final class AiDevApiProviderModelCache extends AiDevApiBaseModel
     /**
      * Define the inverse relationship from a cached model row to its owning provider key.
      *
-     * @return BelongsTo<AiDevApiProviderKey, $this>
+     * @return BelongsTo<LaravelAiRouterProviderKey, $this>
      */
     public function providerKey(): BelongsTo
     {
-        return $this->belongsTo(AiDevApiProviderKey::class, 'provider_key_id');
+        return $this->belongsTo(LaravelAiRouterProviderKey::class, 'provider_key_id');
     }
 }

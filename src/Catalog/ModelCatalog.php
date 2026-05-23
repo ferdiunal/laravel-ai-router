@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Catalog;
+namespace Ferdiunal\LaravelAiRouter\Catalog;
 
 /**
  * Provides the curated built-in model catalog used for fallback routing and model cache enrichment.

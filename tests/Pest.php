@@ -2,6 +2,6 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Tests\TestCase;
+use Ferdiunal\LaravelAiRouter\Tests\TestCase;
 
 uses(TestCase::class)->in('Feature', 'Unit');

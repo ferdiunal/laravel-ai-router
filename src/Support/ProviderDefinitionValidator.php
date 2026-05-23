@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Support;
+namespace Ferdiunal\LaravelAiRouter\Support;
 
 /**
  * Normalizes and validates runtime custom provider definitions before persistence and routing use.

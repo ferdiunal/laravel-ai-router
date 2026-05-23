@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Schema;
 
-function migrateAiDevApiForMigrationTests(): void
+function migrateLaravelAiRouterForMigrationTests(): void
 {
     foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
@@ -12,26 +12,26 @@ function migrateAiDevApiForMigrationTests(): void
     }
 }
 
-it('creates the sqlite compatible ai dev api tables on the package connection', function () {
-    migrateAiDevApiForMigrationTests();
+it('creates the sqlite compatible laravel ai router tables on the package connection', function () {
+    migrateLaravelAiRouterForMigrationTests();
 
-    $schema = Schema::connection((config('ai-dev-api.database.connection') ?: 'ai-dev-api'));
+    $schema = Schema::connection((config('laravel-ai-router.database.connection') ?: 'laravel-ai-router'));
 
-    expect($schema->hasTable('ai_dev_api_models'))->toBeTrue()
-        ->and($schema->hasTable('ai_dev_api_provider_keys'))->toBeTrue()
-        ->and($schema->hasTable('ai_dev_api_fallbacks'))->toBeTrue()
-        ->and($schema->hasTable('ai_dev_api_requests'))->toBeTrue()
-        ->and($schema->hasTable('ai_dev_api_rate_windows'))->toBeTrue()
-        ->and($schema->hasTable('ai_dev_api_provider_model_caches'))->toBeTrue()
-        ->and($schema->hasTable('ai_dev_api_provider_definitions'))->toBeTrue()
-        ->and($schema->hasTable('ai_dev_api_settings'))->toBeTrue();
+    expect($schema->hasTable('laravel_ai_router_models'))->toBeTrue()
+        ->and($schema->hasTable('laravel_ai_router_provider_keys'))->toBeTrue()
+        ->and($schema->hasTable('laravel_ai_router_fallbacks'))->toBeTrue()
+        ->and($schema->hasTable('laravel_ai_router_requests'))->toBeTrue()
+        ->and($schema->hasTable('laravel_ai_router_rate_windows'))->toBeTrue()
+        ->and($schema->hasTable('laravel_ai_router_provider_model_caches'))->toBeTrue()
+        ->and($schema->hasTable('laravel_ai_router_provider_definitions'))->toBeTrue()
+        ->and($schema->hasTable('laravel_ai_router_settings'))->toBeTrue();
 });
 
 it('keeps package migrations idempotent when tables already exist', function () {
-    migrateAiDevApiForMigrationTests();
-    migrateAiDevApiForMigrationTests();
+    migrateLaravelAiRouterForMigrationTests();
+    migrateLaravelAiRouterForMigrationTests();
 
-    expect(Schema::connection((config('ai-dev-api.database.connection') ?: 'ai-dev-api'))->hasTable('ai_dev_api_models'))->toBeTrue();
+    expect(Schema::connection((config('laravel-ai-router.database.connection') ?: 'laravel-ai-router'))->hasTable('laravel_ai_router_models'))->toBeTrue();
 });
 
 it('uses explicit short index names for portable package migrations', function () {

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Tests;
+namespace Ferdiunal\LaravelAiRouter\Tests;
 
-use Ferdiunal\AiDevApi\AiDevApiServiceProvider;
+use Ferdiunal\LaravelAiRouter\LaravelAiRouterServiceProvider;
 use Laravel\Ai\AiServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 
@@ -17,7 +17,7 @@ abstract class TestCase extends Orchestra
     {
         return [
             AiServiceProvider::class,
-            AiDevApiServiceProvider::class,
+            LaravelAiRouterServiceProvider::class,
         ];
     }
 
@@ -30,7 +30,7 @@ abstract class TestCase extends Orchestra
             'prefix' => '',
             'foreign_key_constraints' => true,
         ]);
-        $app['config']->set('database.connections.ai-dev-api', [
+        $app['config']->set('database.connections.laravel-ai-router', [
             'driver' => 'sqlite',
             'database' => ':memory:',
             'prefix' => '',

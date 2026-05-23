@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Models;
+namespace Ferdiunal\LaravelAiRouter\Models;
 
 use Illuminate\Support\Carbon;
 
@@ -28,11 +28,11 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed>|null $metadata
  * @property Carbon|null $created_at
  */
-final class AiDevApiRequest extends AiDevApiBaseModel
+final class LaravelAiRouterRequest extends LaravelAiRouterBaseModel
 {
     public const UPDATED_AT = null;
 
-    protected $table = 'ai_dev_api_requests';
+    protected $table = 'laravel_ai_router_requests';
 
     protected $guarded = [];
 

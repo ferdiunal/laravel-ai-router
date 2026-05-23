@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Models;
+namespace Ferdiunal\LaravelAiRouter\Models;
 
-use Ferdiunal\AiDevApi\Support\KeyMasker;
+use Ferdiunal\LaravelAiRouter\Support\KeyMasker;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
@@ -28,9 +28,9 @@ use Illuminate\Support\Facades\Crypt;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-final class AiDevApiProviderKey extends AiDevApiBaseModel
+final class LaravelAiRouterProviderKey extends LaravelAiRouterBaseModel
 {
-    protected $table = 'ai_dev_api_provider_keys';
+    protected $table = 'laravel_ai_router_provider_keys';
 
     protected $guarded = [];
 
@@ -82,10 +82,10 @@ final class AiDevApiProviderKey extends AiDevApiBaseModel
     /**
      * Define the provider-key relationship to provider-label-scoped cached model rows.
      *
-     * @return HasMany<AiDevApiProviderModelCache, $this>
+     * @return HasMany<LaravelAiRouterProviderModelCache, $this>
      */
     public function modelCaches(): HasMany
     {
-        return $this->hasMany(AiDevApiProviderModelCache::class, 'provider_key_id');
+        return $this->hasMany(LaravelAiRouterProviderModelCache::class, 'provider_key_id');
     }
 }

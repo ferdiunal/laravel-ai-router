@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Console\Commands;
+namespace Ferdiunal\LaravelAiRouter\Console\Commands;
 
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderDefinition;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderDefinition;
 use Illuminate\Console\Command;
 
 use function Laravel\Prompts\table;
@@ -14,7 +14,7 @@ use function Laravel\Prompts\table;
  */
 final class ProviderDefinitionListCommand extends Command
 {
-    protected $signature = 'ai-dev-api:provider-definition:list';
+    protected $signature = 'laravel-ai-router:provider-definition:list';
 
     protected $description = 'List custom OpenAI-compatible provider definitions.';
 
@@ -23,8 +23,8 @@ final class ProviderDefinitionListCommand extends Command
      */
     public function handle(): int
     {
-        $rows = AiDevApiProviderDefinition::query()->orderBy('platform')->get()
-            ->map(fn (AiDevApiProviderDefinition $definition): array => [
+        $rows = LaravelAiRouterProviderDefinition::query()->orderBy('platform')->get()
+            ->map(fn (LaravelAiRouterProviderDefinition $definition): array => [
                 (string) $definition->getKey(),
                 $definition->platform,
                 $definition->name,

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Adapters\Contracts;
+namespace Ferdiunal\LaravelAiRouter\Adapters\Contracts;
 
 use Generator;
 

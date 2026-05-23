@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Models;
+namespace Ferdiunal\LaravelAiRouter\Models;
 
 use Illuminate\Support\Carbon;
 
@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
  * Represents fallback ordering and penalty state for a routable package model.
  *
  * @property int $id
- * @property int $ai_dev_api_model_id
+ * @property int $laravel_ai_router_model_id
  * @property int $priority
  * @property bool $enabled
  * @property int $penalty
@@ -18,9 +18,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-final class AiDevApiFallback extends AiDevApiBaseModel
+final class LaravelAiRouterFallback extends LaravelAiRouterBaseModel
 {
-    protected $table = 'ai_dev_api_fallbacks';
+    protected $table = 'laravel_ai_router_fallbacks';
 
     protected $guarded = [];
 

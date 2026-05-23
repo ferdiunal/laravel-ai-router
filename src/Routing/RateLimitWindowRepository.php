@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Routing;
+namespace Ferdiunal\LaravelAiRouter\Routing;
 
 use Carbon\CarbonImmutable;
-use Ferdiunal\AiDevApi\Models\AiDevApiRateWindow;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterRateWindow;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -62,7 +62,7 @@ final class RateLimitWindowRepository
      */
     public function setCooldown(string $platform, string $modelId, int $keyId, int $seconds): void
     {
-        AiDevApiRateWindow::query()->create([
+        LaravelAiRouterRateWindow::query()->create([
             'platform' => $platform,
             'model_id' => $modelId,
             'provider_key_id' => $keyId,
@@ -78,7 +78,7 @@ final class RateLimitWindowRepository
      */
     public function isOnCooldown(string $platform, string $modelId, int $keyId): bool
     {
-        return AiDevApiRateWindow::query()
+        return LaravelAiRouterRateWindow::query()
             ->where('platform', $platform)
             ->where('model_id', $modelId)
             ->where('provider_key_id', $keyId)
@@ -98,7 +98,7 @@ final class RateLimitWindowRepository
 
         $window = $this->windowBounds($type);
 
-        $used = (int) AiDevApiRateWindow::query()
+        $used = (int) LaravelAiRouterRateWindow::query()
             ->where('platform', $platform)
             ->where('model_id', $modelId)
             ->where('provider_key_id', $keyId)
@@ -120,7 +120,7 @@ final class RateLimitWindowRepository
 
         $window = $this->windowBounds($type);
 
-        $used = (int) AiDevApiRateWindow::query()
+        $used = (int) LaravelAiRouterRateWindow::query()
             ->where('platform', $platform)
             ->where('model_id', $modelId)
             ->where('provider_key_id', $keyId)
@@ -138,8 +138,8 @@ final class RateLimitWindowRepository
     {
         $window = $this->windowBounds($type);
 
-        DB::connection(config('ai-dev-api.database.connection') ?: 'ai-dev-api')->transaction(function () use ($platform, $modelId, $keyId, $type, $requests, $tokens, $window): void {
-            $row = AiDevApiRateWindow::query()
+        DB::connection(config('laravel-ai-router.database.connection') ?: 'laravel-ai-router')->transaction(function () use ($platform, $modelId, $keyId, $type, $requests, $tokens, $window): void {
+            $row = LaravelAiRouterRateWindow::query()
                 ->where('platform', $platform)
                 ->where('model_id', $modelId)
                 ->where('provider_key_id', $keyId)
@@ -148,8 +148,8 @@ final class RateLimitWindowRepository
                 ->lockForUpdate()
                 ->first();
 
-            if (! $row instanceof AiDevApiRateWindow) {
-                AiDevApiRateWindow::query()->create([
+            if (! $row instanceof LaravelAiRouterRateWindow) {
+                LaravelAiRouterRateWindow::query()->create([
                     'platform' => $platform,
                     'model_id' => $modelId,
                     'provider_key_id' => $keyId,

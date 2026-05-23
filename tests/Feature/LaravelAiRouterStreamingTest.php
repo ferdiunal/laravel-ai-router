@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Catalog\SeedModelCatalog;
-use Ferdiunal\AiDevApi\Gateway\AiDevApiTextGateway;
-use Ferdiunal\AiDevApi\Models\AiDevApiModel;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
-use Ferdiunal\AiDevApi\Models\AiDevApiRequest;
+use Ferdiunal\LaravelAiRouter\Catalog\SeedModelCatalog;
+use Ferdiunal\LaravelAiRouter\Gateway\LaravelAiRouterTextGateway;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterModel;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterRequest;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Http\Client\Request;
 use Illuminate\JsonSchema\Types\Type;
@@ -21,7 +21,7 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Tools\Request as ToolRequest;
 
-function migrateAiDevApiForStreamingTests(): void
+function migrateLaravelAiRouterForStreamingTests(): void
 {
     foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
@@ -30,15 +30,15 @@ function migrateAiDevApiForStreamingTests(): void
 }
 
 it('streams OpenAI-compatible chat completion chunks through Laravel AI stream events', function () {
-    migrateAiDevApiForStreamingTests();
+    migrateLaravelAiRouterForStreamingTests();
     app(SeedModelCatalog::class)->seed();
 
-    $model = AiDevApiModel::query()
+    $model = LaravelAiRouterModel::query()
         ->where('platform', 'openrouter')
         ->where('model_id', 'qwen/qwen3-coder:free')
         ->firstOrFail();
 
-    AiDevApiProviderKey::query()->create([
+    LaravelAiRouterProviderKey::query()->create([
         'platform' => 'openrouter',
         'label' => 'Primary',
         'key' => 'key-openrouter-value-123456',
@@ -59,9 +59,9 @@ it('streams OpenAI-compatible chat completion chunks through Laravel AI stream e
         ])."\n\n", 200, ['Content-Type' => 'text/event-stream']);
     });
 
-    config()->set('ai.providers.ai-dev-api', ['driver' => 'ai-dev-api']);
-    $provider = app(AiManager::class)->textProvider('ai-dev-api');
-    $gateway = app(AiDevApiTextGateway::class);
+    config()->set('ai.providers.laravel-ai-router', ['driver' => 'laravel-ai-router']);
+    $provider = app(AiManager::class)->textProvider('laravel-ai-router');
+    $gateway = app(LaravelAiRouterTextGateway::class);
 
     $events = iterator_to_array($gateway->streamText(
         'invocation-1',
@@ -79,7 +79,7 @@ it('streams OpenAI-compatible chat completion chunks through Laravel AI stream e
     expect($events[5])->toBeInstanceOf(StreamEnd::class);
     expect(collect($events)->whereInstanceOf(TextDelta::class)->pluck('delta')->implode(''))->toBe('Merhaba');
 
-    $requestLog = AiDevApiRequest::query()->firstOrFail();
+    $requestLog = LaravelAiRouterRequest::query()->firstOrFail();
     expect($requestLog->status)->toBe('success');
     expect($requestLog->platform)->toBe('openrouter');
     expect($requestLog->provider_label)->toBe('Primary');
@@ -90,15 +90,15 @@ it('streams OpenAI-compatible chat completion chunks through Laravel AI stream e
 });
 
 it('passes stream timeout and handles malformed plus multi-line SSE data events defensively', function () {
-    migrateAiDevApiForStreamingTests();
+    migrateLaravelAiRouterForStreamingTests();
     app(SeedModelCatalog::class)->seed();
 
-    $model = AiDevApiModel::query()
+    $model = LaravelAiRouterModel::query()
         ->where('platform', 'openrouter')
         ->where('model_id', 'qwen/qwen3-coder:free')
         ->firstOrFail();
 
-    AiDevApiProviderKey::query()->create([
+    LaravelAiRouterProviderKey::query()->create([
         'platform' => 'openrouter',
         'label' => 'Primary',
         'key' => 'key-openrouter-value-123456',
@@ -127,9 +127,9 @@ it('passes stream timeout and handles malformed plus multi-line SSE data events 
         ]), 200, ['Content-Type' => 'text/event-stream']);
     });
 
-    config()->set('ai.providers.ai-dev-api', ['driver' => 'ai-dev-api']);
-    $provider = app(AiManager::class)->textProvider('ai-dev-api');
-    $gateway = app(AiDevApiTextGateway::class);
+    config()->set('ai.providers.laravel-ai-router', ['driver' => 'laravel-ai-router']);
+    $provider = app(AiManager::class)->textProvider('laravel-ai-router');
+    $gateway = app(LaravelAiRouterTextGateway::class);
 
     $events = iterator_to_array($gateway->streamText(
         'invocation-2',
@@ -142,7 +142,7 @@ it('passes stream timeout and handles malformed plus multi-line SSE data events 
 
     expect(collect($events)->whereInstanceOf(TextDelta::class)->pluck('delta')->implode(''))->toBe('Çok iyi');
 
-    $requestLog = AiDevApiRequest::query()->firstOrFail();
+    $requestLog = LaravelAiRouterRequest::query()->firstOrFail();
     expect($requestLog->status)->toBe('success');
     expect($requestLog->input_tokens)->toBe(3);
     expect($requestLog->output_tokens)->toBe(2);
@@ -150,10 +150,10 @@ it('passes stream timeout and handles malformed plus multi-line SSE data events 
 });
 
 it('fails explicitly when streaming is requested with tools before opening a provider stream', function () {
-    config()->set('ai.providers.ai-dev-api', ['driver' => 'ai-dev-api']);
+    config()->set('ai.providers.laravel-ai-router', ['driver' => 'laravel-ai-router']);
 
-    $provider = app(AiManager::class)->textProvider('ai-dev-api');
-    $gateway = app(AiDevApiTextGateway::class);
+    $provider = app(AiManager::class)->textProvider('laravel-ai-router');
+    $gateway = app(LaravelAiRouterTextGateway::class);
 
     $tool = new class implements Tool
     {
@@ -182,4 +182,4 @@ it('fails explicitly when streaming is requested with tools before opening a pro
         [new UserMessage('Bir araç çağır')],
         [$tool],
     ));
-})->throws(LogicException::class, 'AI Dev API does not support streaming tool calls yet.');
+})->throws(LogicException::class, 'Laravel AI Router does not support streaming tool calls yet.');

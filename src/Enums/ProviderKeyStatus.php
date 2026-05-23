@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Enums;
+namespace Ferdiunal\LaravelAiRouter\Enums;
 
 /**
  * Enumerates the health states persisted for provider API keys.

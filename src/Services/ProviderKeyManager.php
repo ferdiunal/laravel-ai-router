@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Services;
+namespace Ferdiunal\LaravelAiRouter\Services;
 
-use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
+use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -21,7 +21,7 @@ final class ProviderKeyManager
     /**
      * Store an encrypted provider key and optionally refresh its provider-label-scoped model cache.
      */
-    public function add(string $platform, string $apiKey, string $label, bool $refreshModels = true): AiDevApiProviderKey
+    public function add(string $platform, string $apiKey, string $label, bool $refreshModels = true): LaravelAiRouterProviderKey
     {
         ProviderCatalog::get($platform);
 
@@ -30,7 +30,7 @@ final class ProviderKeyManager
             throw ValidationException::withMessages(['label' => 'Provider label is required.']);
         }
 
-        $exists = AiDevApiProviderKey::query()
+        $exists = LaravelAiRouterProviderKey::query()
             ->where('platform', $platform)
             ->where('label', $label)
             ->exists();
@@ -39,7 +39,7 @@ final class ProviderKeyManager
             throw ValidationException::withMessages(['label' => "Label [{$label}] already exists for provider [{$platform}]."]);
         }
 
-        $key = AiDevApiProviderKey::query()->create([
+        $key = LaravelAiRouterProviderKey::query()->create([
             'platform' => $platform,
             'label' => $label,
             'key' => $apiKey,
@@ -59,15 +59,15 @@ final class ProviderKeyManager
      */
     public function remove(int $id): bool
     {
-        return (bool) AiDevApiProviderKey::query()->whereKey($id)->delete();
+        return (bool) LaravelAiRouterProviderKey::query()->whereKey($id)->delete();
     }
 
     /**
      * Enable or disable a provider key row by its package database primary key.
      */
-    public function setEnabled(int $id, bool $enabled): AiDevApiProviderKey
+    public function setEnabled(int $id, bool $enabled): LaravelAiRouterProviderKey
     {
-        $key = AiDevApiProviderKey::query()->findOrFail($id);
+        $key = LaravelAiRouterProviderKey::query()->findOrFail($id);
         $key->forceFill(['enabled' => $enabled])->save();
 
         return $key->refresh();

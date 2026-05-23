@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Catalog\SeedModelCatalog;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
+use Ferdiunal\LaravelAiRouter\Catalog\SeedModelCatalog;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Promptable;
 
-function migrateAiDevApiForGatewayTests(): void
+function migrateLaravelAiRouterForGatewayTests(): void
 {
     foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
@@ -17,11 +17,11 @@ function migrateAiDevApiForGatewayTests(): void
     }
 }
 
-it('prompts a Laravel AI agent through the ai-dev-api provider and auto router', function () {
-    migrateAiDevApiForGatewayTests();
+it('prompts a Laravel AI agent through the laravel-ai-router provider and auto router', function () {
+    migrateLaravelAiRouterForGatewayTests();
     app(SeedModelCatalog::class)->seed();
 
-    AiDevApiProviderKey::query()->create([
+    LaravelAiRouterProviderKey::query()->create([
         'platform' => 'openrouter',
         'label' => 'Primary',
         'key' => 'key-openrouter-value-123456',
@@ -54,12 +54,12 @@ it('prompts a Laravel AI agent through the ai-dev-api provider and auto router',
         }
     };
 
-    $response = $agent->prompt('Selam', provider: 'ai-dev-api', model: 'auto');
+    $response = $agent->prompt('Selam', provider: 'laravel-ai-router', model: 'auto');
 
     expect((string) $response)->toBe('Merhaba kanka')
         ->and($response->usage->promptTokens)->toBe(3)
         ->and($response->usage->completionTokens)->toBe(4)
-        ->and($response->meta->provider)->toBe('ai-dev-api')
+        ->and($response->meta->provider)->toBe('laravel-ai-router')
         ->and($response->meta->model)->toBe('qwen/qwen3-coder:free');
 
     Http::assertSent(function (Request $request): bool {

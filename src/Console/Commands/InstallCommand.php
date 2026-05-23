@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Console\Commands;
+namespace Ferdiunal\LaravelAiRouter\Console\Commands;
 
-use Ferdiunal\AiDevApi\Catalog\SeedModelCatalog;
-use Ferdiunal\AiDevApi\Console\Concerns\InteractsWithProviderPrompts;
-use Ferdiunal\AiDevApi\Console\Wizards\ProviderKeySetupWizard;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
-use Ferdiunal\AiDevApi\Services\SqliteOptimizer;
+use Ferdiunal\LaravelAiRouter\Catalog\SeedModelCatalog;
+use Ferdiunal\LaravelAiRouter\Console\Concerns\InteractsWithProviderPrompts;
+use Ferdiunal\LaravelAiRouter\Console\Wizards\ProviderKeySetupWizard;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
+use Ferdiunal\LaravelAiRouter\Services\SqliteOptimizer;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
@@ -23,9 +23,9 @@ final class InstallCommand extends Command
 {
     use InteractsWithProviderPrompts;
 
-    protected $signature = 'ai-dev-api:install';
+    protected $signature = 'laravel-ai-router:install';
 
-    protected $description = 'Prepare AI Dev API local storage and optionally add a provider key.';
+    protected $description = 'Prepare Laravel AI Router local storage and optionally add a provider key.';
 
     /**
      * Prepare package storage, run internal migrations, seed catalogs, optimize SQLite, and optionally launch setup.
@@ -35,9 +35,9 @@ final class InstallCommand extends Command
         SqliteOptimizer $sqliteOptimizer,
         ProviderKeySetupWizard $providerWizard,
     ): int {
-        $connection = (string) (config('ai-dev-api.database.connection') ?: 'ai-dev-api');
+        $connection = (string) (config('laravel-ai-router.database.connection') ?: 'laravel-ai-router');
 
-        info('Preparing AI Dev API local storage.');
+        info('Preparing Laravel AI Router local storage.');
         $database = $this->ensureSqliteDatabaseFile($connection);
         if ($database !== null) {
             info('Local SQLite storage ready: '.$database);
@@ -46,7 +46,7 @@ final class InstallCommand extends Command
         $this->runInternalMigrations($connection);
         info('Internal database tables are ready.');
 
-        if (Schema::connection($connection)->hasTable('ai_dev_api_models')) {
+        if (Schema::connection($connection)->hasTable('laravel_ai_router_models')) {
             $seedModelCatalog->seed();
             info('Curated free model catalog seeded.');
         }
@@ -55,13 +55,13 @@ final class InstallCommand extends Command
         info('SQLite optimizer checked'.($applied === [] ? ' (no-op).' : ': '.implode(', ', $applied)));
 
         if ($this->shouldPrompt()) {
-            $hasProviderKeys = AiDevApiProviderKey::query()->exists();
+            $hasProviderKeys = LaravelAiRouterProviderKey::query()->exists();
             if (! $hasProviderKeys || $this->confirmPrompt('Add another provider key now?', false)) {
                 $providerWizard->run(true);
             }
         }
 
-        outro('AI Dev API install flow completed.');
+        outro('Laravel AI Router install flow completed.');
 
         return self::SUCCESS;
     }

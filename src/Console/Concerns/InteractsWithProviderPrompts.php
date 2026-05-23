@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Console\Concerns;
+namespace Ferdiunal\LaravelAiRouter\Console\Concerns;
 
-use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderDefinition;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
+use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderDefinition;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\password;
@@ -98,9 +98,9 @@ trait InteractsWithProviderPrompts
     /**
      * Render a searchable provider-key prompt using masked credentials only.
      */
-    protected function keyPrompt(string $label = 'Provider key'): ?AiDevApiProviderKey
+    protected function keyPrompt(string $label = 'Provider key'): ?LaravelAiRouterProviderKey
     {
-        $keys = AiDevApiProviderKey::query()->orderBy('platform')->orderBy('label')->get();
+        $keys = LaravelAiRouterProviderKey::query()->orderBy('platform')->orderBy('label')->get();
 
         if ($keys->isEmpty()) {
             return null;
@@ -113,8 +113,8 @@ trait InteractsWithProviderPrompts
         $selected = search(
             label: $label,
             options: fn (string $value): array => $keys
-                ->filter(fn (AiDevApiProviderKey $key): bool => str_contains(strtolower($key->platform.' '.$key->label), strtolower($value)))
-                ->mapWithKeys(fn (AiDevApiProviderKey $key): array => [(int) $key->getKey() => "{$key->platform} / {$key->label} / {$key->masked_key}"])
+                ->filter(fn (LaravelAiRouterProviderKey $key): bool => str_contains(strtolower($key->platform.' '.$key->label), strtolower($value)))
+                ->mapWithKeys(fn (LaravelAiRouterProviderKey $key): array => [(int) $key->getKey() => "{$key->platform} / {$key->label} / {$key->masked_key}"])
                 ->all(),
             placeholder: 'Search provider or label',
         );
@@ -125,9 +125,9 @@ trait InteractsWithProviderPrompts
     /**
      * Render a searchable custom-provider definition prompt for runtime definition commands.
      */
-    protected function definitionPrompt(string $label = 'Custom provider definition'): ?AiDevApiProviderDefinition
+    protected function definitionPrompt(string $label = 'Custom provider definition'): ?LaravelAiRouterProviderDefinition
     {
-        $definitions = AiDevApiProviderDefinition::query()->orderBy('platform')->get();
+        $definitions = LaravelAiRouterProviderDefinition::query()->orderBy('platform')->get();
 
         if ($definitions->isEmpty()) {
             return null;
@@ -140,8 +140,8 @@ trait InteractsWithProviderPrompts
         $selected = search(
             label: $label,
             options: fn (string $value): array => $definitions
-                ->filter(fn (AiDevApiProviderDefinition $definition): bool => str_contains(strtolower($definition->platform.' '.$definition->name), strtolower($value)))
-                ->mapWithKeys(fn (AiDevApiProviderDefinition $definition): array => [(int) $definition->getKey() => "{$definition->platform} / {$definition->name} / {$definition->base_url}"])
+                ->filter(fn (LaravelAiRouterProviderDefinition $definition): bool => str_contains(strtolower($definition->platform.' '.$definition->name), strtolower($value)))
+                ->mapWithKeys(fn (LaravelAiRouterProviderDefinition $definition): array => [(int) $definition->getKey() => "{$definition->platform} / {$definition->name} / {$definition->base_url}"])
                 ->all(),
             placeholder: 'Search provider slug or name',
         );

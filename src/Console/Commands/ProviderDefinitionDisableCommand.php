@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Console\Commands;
+namespace Ferdiunal\LaravelAiRouter\Console\Commands;
 
-use Ferdiunal\AiDevApi\Console\Concerns\InteractsWithProviderPrompts;
-use Ferdiunal\AiDevApi\Services\ProviderDefinitionManager;
+use Ferdiunal\LaravelAiRouter\Console\Concerns\InteractsWithProviderPrompts;
+use Ferdiunal\LaravelAiRouter\Services\ProviderDefinitionManager;
 use Illuminate\Console\Command;
 
 use function Laravel\Prompts\info;
@@ -18,7 +18,7 @@ final class ProviderDefinitionDisableCommand extends Command
 {
     use InteractsWithProviderPrompts;
 
-    protected $signature = 'ai-dev-api:provider-definition:disable';
+    protected $signature = 'laravel-ai-router:provider-definition:disable';
 
     protected $description = 'Disable a custom provider definition selected by slug.';
 

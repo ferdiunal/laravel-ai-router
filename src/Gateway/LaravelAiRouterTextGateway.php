@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Gateway;
+namespace Ferdiunal\LaravelAiRouter\Gateway;
 
-use Ferdiunal\AiDevApi\Adapters\ProviderAdapterRegistry;
-use Ferdiunal\AiDevApi\Exceptions\ProviderAuthenticationException;
-use Ferdiunal\AiDevApi\Routing\AiDevApiRouter;
-use Ferdiunal\AiDevApi\Routing\RateLimitWindowRepository;
-use Ferdiunal\AiDevApi\Routing\RouteResult;
-use Ferdiunal\AiDevApi\Services\UsageLogger;
+use Ferdiunal\LaravelAiRouter\Adapters\ProviderAdapterRegistry;
+use Ferdiunal\LaravelAiRouter\Exceptions\ProviderAuthenticationException;
+use Ferdiunal\LaravelAiRouter\Routing\ModelRouter;
+use Ferdiunal\LaravelAiRouter\Routing\RateLimitWindowRepository;
+use Ferdiunal\LaravelAiRouter\Routing\RouteResult;
+use Ferdiunal\LaravelAiRouter\Services\UsageLogger;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
@@ -63,7 +63,7 @@ use Throwable;
 /**
  * Adapts Laravel AI text generation and streaming calls to routed OpenAI-compatible provider keys.
  */
-final class AiDevApiTextGateway implements Gateway
+final class LaravelAiRouterTextGateway implements Gateway
 {
     use InvokesTools;
 
@@ -71,7 +71,7 @@ final class AiDevApiTextGateway implements Gateway
      * Initialize the gateway with routing, adapter dispatch, rate-limit, and usage logging services.
      */
     public function __construct(
-        private readonly AiDevApiRouter $router,
+        private readonly ModelRouter $router,
         private readonly ProviderAdapterRegistry $adapters,
         private readonly RateLimitWindowRepository $rateLimits,
         private readonly UsageLogger $usageLogger,
@@ -138,7 +138,7 @@ final class AiDevApiTextGateway implements Gateway
             }
 
             if ($route instanceof RouteResult && $this->shouldCooldownRoute($category)) {
-                $this->rateLimits->setCooldown($route->platform, $route->modelId, $route->keyId, (int) config('ai-dev-api.routing.cooldown_seconds', 120));
+                $this->rateLimits->setCooldown($route->platform, $route->modelId, $route->keyId, (int) config('laravel-ai-router.routing.cooldown_seconds', 120));
                 $this->router->recordRetryableFailure($route);
             }
 
@@ -165,7 +165,7 @@ final class AiDevApiTextGateway implements Gateway
         ?int $timeout = null,
     ): Generator {
         if ($tools !== []) {
-            throw new LogicException('AI Dev API does not support streaming tool calls yet.');
+            throw new LogicException('Laravel AI Router does not support streaming tool calls yet.');
         }
 
         $startedAt = microtime(true);
@@ -188,7 +188,7 @@ final class AiDevApiTextGateway implements Gateway
 
             foreach ($this->adapters->for($route->platform)->stream($route->apiKey, $payloadMessages, $route->modelId, $this->mapOptions($provider, $options, $schema), $timeout) as $chunk) {
                 if (isset($chunk['error'])) {
-                    throw new RuntimeException((string) data_get($chunk, 'error.message', 'AI Dev API streaming error.'));
+                    throw new RuntimeException((string) data_get($chunk, 'error.message', 'Laravel AI Router streaming error.'));
                 }
 
                 if (! $streamStarted) {
@@ -263,7 +263,7 @@ final class AiDevApiTextGateway implements Gateway
             }
 
             if ($route instanceof RouteResult && $this->shouldCooldownRoute($category)) {
-                $this->rateLimits->setCooldown($route->platform, $route->modelId, $route->keyId, (int) config('ai-dev-api.routing.cooldown_seconds', 120));
+                $this->rateLimits->setCooldown($route->platform, $route->modelId, $route->keyId, (int) config('laravel-ai-router.routing.cooldown_seconds', 120));
                 $this->router->recordRetryableFailure($route);
             }
 
@@ -282,7 +282,7 @@ final class AiDevApiTextGateway implements Gateway
         ?string $instructions = null,
         int $timeout = 30,
     ): AudioResponse {
-        throw new LogicException('AI Dev API does not support audio generation.');
+        throw new LogicException('Laravel AI Router does not support audio generation.');
     }
 
     /**
@@ -290,7 +290,7 @@ final class AiDevApiTextGateway implements Gateway
      */
     public function generateEmbeddings(EmbeddingProvider $provider, string $model, array $inputs, int $dimensions, int $timeout = 30, array $providerOptions = []): EmbeddingsResponse
     {
-        throw new LogicException('AI Dev API does not support embeddings.');
+        throw new LogicException('Laravel AI Router does not support embeddings.');
     }
 
     /**
@@ -307,7 +307,7 @@ final class AiDevApiTextGateway implements Gateway
         ?string $quality = null,
         ?int $timeout = null,
     ): ImageResponse {
-        throw new LogicException('AI Dev API does not support image generation.');
+        throw new LogicException('Laravel AI Router does not support image generation.');
     }
 
     /**
@@ -322,7 +322,7 @@ final class AiDevApiTextGateway implements Gateway
         int $timeout = 30,
         array $providerOptions = [],
     ): TranscriptionResponse {
-        throw new LogicException('AI Dev API does not support transcription generation.');
+        throw new LogicException('Laravel AI Router does not support transcription generation.');
     }
 
     /**
@@ -341,7 +341,7 @@ final class AiDevApiTextGateway implements Gateway
 
         foreach ($messages as $message) {
             if ($message instanceof UserMessage && $message->attachments->isNotEmpty()) {
-                throw new LogicException('AI Dev API does not support file or image attachments yet.');
+                throw new LogicException('Laravel AI Router does not support file or image attachments yet.');
             }
 
             if ($message instanceof AssistantMessage) {
@@ -557,7 +557,7 @@ final class AiDevApiTextGateway implements Gateway
 
         foreach ($tools as $tool) {
             if ($tool instanceof ProviderTool) {
-                throw new LogicException('AI Dev API does not support provider-native tools yet.');
+                throw new LogicException('Laravel AI Router does not support provider-native tools yet.');
             }
 
             if ($tool instanceof Tool) {
@@ -755,7 +755,7 @@ final class AiDevApiTextGateway implements Gateway
      */
     private function providerDriver(TextProvider $provider): string
     {
-        return $provider instanceof BaseProvider ? $provider->driver() : 'ai-dev-api';
+        return $provider instanceof BaseProvider ? $provider->driver() : 'laravel-ai-router';
     }
 
     /**

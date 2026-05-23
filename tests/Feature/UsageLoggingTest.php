@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Catalog\SeedModelCatalog;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
-use Ferdiunal\AiDevApi\Models\AiDevApiRequest;
+use Ferdiunal\LaravelAiRouter\Catalog\SeedModelCatalog;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterRequest;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Promptable;
 
-function migrateAiDevApiForUsageTests(): void
+function migrateLaravelAiRouterForUsageTests(): void
 {
     foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
@@ -18,10 +18,10 @@ function migrateAiDevApiForUsageTests(): void
 }
 
 it('records provider label, model, token usage, and latency for successful prompts', function () {
-    migrateAiDevApiForUsageTests();
+    migrateLaravelAiRouterForUsageTests();
     app(SeedModelCatalog::class)->seed();
 
-    AiDevApiProviderKey::query()->create([
+    LaravelAiRouterProviderKey::query()->create([
         'platform' => 'openrouter',
         'label' => 'Primary',
         'key' => 'key-openrouter-value-123456',
@@ -49,9 +49,9 @@ it('records provider label, model, token usage, and latency for successful promp
         }
     };
 
-    $agent->prompt('Selam', provider: 'ai-dev-api', model: 'auto');
+    $agent->prompt('Selam', provider: 'laravel-ai-router', model: 'auto');
 
-    $request = AiDevApiRequest::query()->firstOrFail();
+    $request = LaravelAiRouterRequest::query()->firstOrFail();
 
     expect($request->platform)->toBe('openrouter')
         ->and($request->provider_label)->toBe('Primary')
@@ -63,10 +63,10 @@ it('records provider label, model, token usage, and latency for successful promp
 });
 
 it('marks routed provider keys invalid when completions return auth failures', function () {
-    migrateAiDevApiForUsageTests();
+    migrateLaravelAiRouterForUsageTests();
     app(SeedModelCatalog::class)->seed();
 
-    $key = AiDevApiProviderKey::query()->create([
+    $key = LaravelAiRouterProviderKey::query()->create([
         'platform' => 'openrouter',
         'label' => 'Primary',
         'key' => 'key-openrouter-value-invalid',
@@ -93,7 +93,7 @@ it('marks routed provider keys invalid when completions return auth failures', f
     $thrown = null;
 
     try {
-        $agent->prompt('Selam', provider: 'ai-dev-api', model: 'auto');
+        $agent->prompt('Selam', provider: 'laravel-ai-router', model: 'auto');
     } catch (RuntimeException $exception) {
         $thrown = $exception;
     }
@@ -103,7 +103,7 @@ it('marks routed provider keys invalid when completions return auth failures', f
 
     expect($key->refresh()->status)->toBe('invalid');
 
-    $request = AiDevApiRequest::query()->firstOrFail();
+    $request = LaravelAiRouterRequest::query()->firstOrFail();
     expect($request->status)->toBe('error');
     expect($request->error_category)->toBe('auth');
 });

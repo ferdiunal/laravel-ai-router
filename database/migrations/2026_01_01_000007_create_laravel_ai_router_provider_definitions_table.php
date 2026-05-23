@@ -10,13 +10,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        $schema = Schema::connection((config('ai-dev-api.database.connection') ?: 'ai-dev-api'));
+        $schema = Schema::connection((config('laravel-ai-router.database.connection') ?: 'laravel-ai-router'));
 
-        if ($schema->hasTable('ai_dev_api_provider_definitions')) {
+        if ($schema->hasTable('laravel_ai_router_provider_definitions')) {
             return;
         }
 
-        $schema->create('ai_dev_api_provider_definitions', function (Blueprint $table): void {
+        $schema->create('laravel_ai_router_provider_definitions', function (Blueprint $table): void {
             $table->id();
             $table->string('platform');
             $table->string('name');
@@ -28,13 +28,13 @@ return new class extends Migration
             $table->boolean('enabled')->default(true);
             $table->timestamps();
 
-            $table->unique('platform', 'ai_dev_provider_definitions_platform_unique');
-            $table->index(['enabled', 'adapter'], 'ai_dev_provider_definitions_state_idx');
+            $table->unique('platform', 'laravel_ai_router_provider_definitions_platform_unique');
+            $table->index(['enabled', 'adapter'], 'laravel_ai_router_provider_definitions_state_idx');
         });
     }
 
     public function down(): void
     {
-        Schema::connection((config('ai-dev-api.database.connection') ?: 'ai-dev-api'))->dropIfExists('ai_dev_api_provider_definitions');
+        Schema::connection((config('laravel-ai-router.database.connection') ?: 'laravel-ai-router'))->dropIfExists('laravel_ai_router_provider_definitions');
     }
 };

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Catalog\SeedModelCatalog;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
-use Ferdiunal\AiDevApi\Models\AiDevApiRateWindow;
+use Ferdiunal\LaravelAiRouter\Catalog\SeedModelCatalog;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterRateWindow;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
@@ -21,7 +21,7 @@ use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Tools\Request as ToolRequest;
 
-function migrateAiDevApiForSdkParityTests(): void
+function migrateLaravelAiRouterForSdkParityTests(): void
 {
     foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
@@ -29,9 +29,9 @@ function migrateAiDevApiForSdkParityTests(): void
     }
 }
 
-function seedAiDevApiKeyForSdkParity(string $label = 'Primary'): AiDevApiProviderKey
+function seedLaravelAiRouterKeyForSdkParity(string $label = 'Primary'): LaravelAiRouterProviderKey
 {
-    return AiDevApiProviderKey::query()->create([
+    return LaravelAiRouterProviderKey::query()->create([
         'platform' => 'openrouter',
         'label' => $label,
         'key' => 'key-openrouter-value-'.strtolower($label),
@@ -41,9 +41,9 @@ function seedAiDevApiKeyForSdkParity(string $label = 'Primary'): AiDevApiProvide
 }
 
 it('returns Laravel AI structured agent responses when a schema is defined', function () {
-    migrateAiDevApiForSdkParityTests();
+    migrateLaravelAiRouterForSdkParityTests();
     app(SeedModelCatalog::class)->seed();
-    seedAiDevApiKeyForSdkParity();
+    seedLaravelAiRouterKeyForSdkParity();
 
     Http::fake([
         'https://openrouter.ai/api/v1/chat/completions' => Http::response([
@@ -79,23 +79,23 @@ it('returns Laravel AI structured agent responses when a schema is defined', fun
         }
     };
 
-    $response = $agent->prompt('Durumu özetle', provider: 'ai-dev-api', model: 'auto');
+    $response = $agent->prompt('Durumu özetle', provider: 'laravel-ai-router', model: 'auto');
 
     expect($response)->toBeInstanceOf(StructuredAgentResponse::class)
         ->and($response['summary'])->toBe('Hazır')
         ->and($response['score'])->toBe(9)
         ->and($response->usage->promptTokens)->toBe(5)
         ->and($response->usage->completionTokens)->toBe(6)
-        ->and($response->meta->provider)->toBe('ai-dev-api')
+        ->and($response->meta->provider)->toBe('laravel-ai-router')
         ->and($response->meta->model)->toBe('qwen/qwen3-coder:free');
 
     Http::assertSent(fn (Request $request): bool => $request['response_format'] === ['type' => 'json_object']);
 });
 
 it('executes OpenAI-compatible tool calls and continues with tool results', function () {
-    migrateAiDevApiForSdkParityTests();
+    migrateLaravelAiRouterForSdkParityTests();
     app(SeedModelCatalog::class)->seed();
-    seedAiDevApiKeyForSdkParity();
+    seedLaravelAiRouterKeyForSdkParity();
 
     $tool = new class implements Tool
     {
@@ -182,7 +182,7 @@ it('executes OpenAI-compatible tool calls and continues with tool results', func
         }
     };
 
-    $response = $agent->prompt('A-100 sipariş toplamı nedir?', provider: 'ai-dev-api', model: 'auto');
+    $response = $agent->prompt('A-100 sipariş toplamı nedir?', provider: 'laravel-ai-router', model: 'auto');
 
     expect((string) $response)->toBe('Sipariş toplamı 42 TRY.')
         ->and($tool->calls)->toBe(1)
@@ -192,7 +192,7 @@ it('executes OpenAI-compatible tool calls and continues with tool results', func
         ->and($response->toolResults)->toHaveCount(1)
         ->and($response->steps)->toHaveCount(2);
 
-    expect((int) AiDevApiRateWindow::query()->where('window_type', 'rpm')->value('request_count'))->toBe(2);
+    expect((int) LaravelAiRouterRateWindow::query()->where('window_type', 'rpm')->value('request_count'))->toBe(2);
 
     Http::assertSentCount(2);
     Http::assertSent(function (Request $request): bool {
@@ -227,12 +227,12 @@ it('executes OpenAI-compatible tool calls and continues with tool results', func
 });
 
 it('maps retryable provider failures to Laravel AI failover exceptions', function () {
-    migrateAiDevApiForSdkParityTests();
+    migrateLaravelAiRouterForSdkParityTests();
     app(SeedModelCatalog::class)->seed();
-    seedAiDevApiKeyForSdkParity('Primary');
-    seedAiDevApiKeyForSdkParity('Backup');
+    seedLaravelAiRouterKeyForSdkParity('Primary');
+    seedLaravelAiRouterKeyForSdkParity('Backup');
 
-    config()->set('ai.providers.ai-dev-api-backup', ['driver' => 'ai-dev-api']);
+    config()->set('ai.providers.laravel-ai-router-backup', ['driver' => 'laravel-ai-router']);
 
     Event::fake([AgentFailedOver::class]);
 
@@ -265,7 +265,7 @@ it('maps retryable provider failures to Laravel AI failover exceptions', functio
 
     $response = $agent->prompt(
         'Selam',
-        provider: ['ai-dev-api' => 'auto', 'ai-dev-api-backup' => 'auto'],
+        provider: ['laravel-ai-router' => 'auto', 'laravel-ai-router-backup' => 'auto'],
     );
 
     expect((string) $response)->toBe('Failover çalıştı');
@@ -275,9 +275,9 @@ it('maps retryable provider failures to Laravel AI failover exceptions', functio
 });
 
 it('passes non-stream prompt timeouts to the upstream provider request', function () {
-    migrateAiDevApiForSdkParityTests();
+    migrateLaravelAiRouterForSdkParityTests();
     app(SeedModelCatalog::class)->seed();
-    seedAiDevApiKeyForSdkParity();
+    seedLaravelAiRouterKeyForSdkParity();
 
     Http::fake(function (Request $request, array $options) {
         expect($request->url())->toBe('https://openrouter.ai/api/v1/chat/completions');
@@ -307,18 +307,18 @@ it('passes non-stream prompt timeouts to the upstream provider request', functio
         }
     };
 
-    $response = $agent->prompt('Selam', provider: 'ai-dev-api', model: 'auto', timeout: 17);
+    $response = $agent->prompt('Selam', provider: 'laravel-ai-router', model: 'auto', timeout: 17);
 
     expect((string) $response)->toBe('Tamam');
 });
 
 it('can fail over streaming prompts before emitting stream events', function () {
-    migrateAiDevApiForSdkParityTests();
+    migrateLaravelAiRouterForSdkParityTests();
     app(SeedModelCatalog::class)->seed();
-    seedAiDevApiKeyForSdkParity('Primary');
-    seedAiDevApiKeyForSdkParity('Backup');
+    seedLaravelAiRouterKeyForSdkParity('Primary');
+    seedLaravelAiRouterKeyForSdkParity('Backup');
 
-    config()->set('ai.providers.ai-dev-api-backup', ['driver' => 'ai-dev-api']);
+    config()->set('ai.providers.laravel-ai-router-backup', ['driver' => 'laravel-ai-router']);
 
     Event::fake([AgentFailedOver::class]);
 
@@ -349,7 +349,7 @@ it('can fail over streaming prompts before emitting stream events', function () 
 
     $events = iterator_to_array($agent->stream(
         'Selam',
-        provider: ['ai-dev-api' => 'auto', 'ai-dev-api-backup' => 'auto'],
+        provider: ['laravel-ai-router' => 'auto', 'laravel-ai-router-backup' => 'auto'],
     ));
 
     expect(collect($events)->whereInstanceOf(TextDelta::class)->pluck('delta')->implode(''))->toBe('Yedek çalıştı');
@@ -359,12 +359,12 @@ it('can fail over streaming prompts before emitting stream events', function () 
 });
 
 it('maps generic payment required responses to insufficient credit failover', function () {
-    migrateAiDevApiForSdkParityTests();
+    migrateLaravelAiRouterForSdkParityTests();
     app(SeedModelCatalog::class)->seed();
-    seedAiDevApiKeyForSdkParity('Primary');
-    seedAiDevApiKeyForSdkParity('Backup');
+    seedLaravelAiRouterKeyForSdkParity('Primary');
+    seedLaravelAiRouterKeyForSdkParity('Backup');
 
-    config()->set('ai.providers.ai-dev-api-backup', ['driver' => 'ai-dev-api']);
+    config()->set('ai.providers.laravel-ai-router-backup', ['driver' => 'laravel-ai-router']);
 
     Event::fake([AgentFailedOver::class]);
 
@@ -397,7 +397,7 @@ it('maps generic payment required responses to insufficient credit failover', fu
 
     $response = $agent->prompt(
         'Selam',
-        provider: ['ai-dev-api' => 'auto', 'ai-dev-api-backup' => 'auto'],
+        provider: ['laravel-ai-router' => 'auto', 'laravel-ai-router-backup' => 'auto'],
     );
 
     expect((string) $response)->toBe('Yedek ödeme sonrası çalıştı');
@@ -407,12 +407,12 @@ it('maps generic payment required responses to insufficient credit failover', fu
 });
 
 it('maps generic provider overload responses to failover', function () {
-    migrateAiDevApiForSdkParityTests();
+    migrateLaravelAiRouterForSdkParityTests();
     app(SeedModelCatalog::class)->seed();
-    seedAiDevApiKeyForSdkParity('Primary');
-    seedAiDevApiKeyForSdkParity('Backup');
+    seedLaravelAiRouterKeyForSdkParity('Primary');
+    seedLaravelAiRouterKeyForSdkParity('Backup');
 
-    config()->set('ai.providers.ai-dev-api-backup', ['driver' => 'ai-dev-api']);
+    config()->set('ai.providers.laravel-ai-router-backup', ['driver' => 'laravel-ai-router']);
 
     Event::fake([AgentFailedOver::class]);
 
@@ -445,7 +445,7 @@ it('maps generic provider overload responses to failover', function () {
 
     $response = $agent->prompt(
         'Selam',
-        provider: ['ai-dev-api' => 'auto', 'ai-dev-api-backup' => 'auto'],
+        provider: ['laravel-ai-router' => 'auto', 'laravel-ai-router-backup' => 'auto'],
     );
 
     expect((string) $response)->toBe('Yedek overload sonrası çalıştı');
@@ -455,12 +455,12 @@ it('maps generic provider overload responses to failover', function () {
 });
 
 it('maps connection timed out failures to provider overload failover', function () {
-    migrateAiDevApiForSdkParityTests();
+    migrateLaravelAiRouterForSdkParityTests();
     app(SeedModelCatalog::class)->seed();
-    seedAiDevApiKeyForSdkParity('Primary');
-    seedAiDevApiKeyForSdkParity('Backup');
+    seedLaravelAiRouterKeyForSdkParity('Primary');
+    seedLaravelAiRouterKeyForSdkParity('Backup');
 
-    config()->set('ai.providers.ai-dev-api-backup', ['driver' => 'ai-dev-api']);
+    config()->set('ai.providers.laravel-ai-router-backup', ['driver' => 'laravel-ai-router']);
 
     Event::fake([AgentFailedOver::class]);
 
@@ -497,7 +497,7 @@ it('maps connection timed out failures to provider overload failover', function 
 
     $response = $agent->prompt(
         'Selam',
-        provider: ['ai-dev-api' => 'auto', 'ai-dev-api-backup' => 'auto'],
+        provider: ['laravel-ai-router' => 'auto', 'laravel-ai-router-backup' => 'auto'],
     );
 
     expect((string) $response)->toBe('Yedek timeout sonrası çalıştı');

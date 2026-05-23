@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Catalog;
+namespace Ferdiunal\LaravelAiRouter\Catalog;
 
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderDefinition;
-use Ferdiunal\AiDevApi\Support\ProviderDefinitionValidator;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderDefinition;
+use Ferdiunal\LaravelAiRouter\Support\ProviderDefinitionValidator;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use Throwable;
@@ -93,7 +93,7 @@ final class ProviderCatalog
      */
     private static function customFromConfig(): array
     {
-        $configured = config('ai-dev-api.providers.custom', []);
+        $configured = config('laravel-ai-router.providers.custom', []);
         if (! is_array($configured)) {
             return [];
         }
@@ -121,16 +121,16 @@ final class ProviderCatalog
     private static function customFromDatabase(): array
     {
         try {
-            if (! Schema::connection((config('ai-dev-api.database.connection') ?: 'ai-dev-api'))->hasTable('ai_dev_api_provider_definitions')) {
+            if (! Schema::connection((config('laravel-ai-router.database.connection') ?: 'laravel-ai-router'))->hasTable('laravel_ai_router_provider_definitions')) {
                 return [];
             }
 
-            return AiDevApiProviderDefinition::query()
+            return LaravelAiRouterProviderDefinition::query()
                 ->where('enabled', true)
                 ->where('adapter', 'openai-compatible')
                 ->orderBy('platform')
                 ->get()
-                ->mapWithKeys(function (AiDevApiProviderDefinition $definition): array {
+                ->mapWithKeys(function (LaravelAiRouterProviderDefinition $definition): array {
                     $normalized = ProviderDefinitionValidator::normalizeOpenAiCompatible($definition->platform, [
                         'name' => $definition->name,
                         'base_url' => $definition->base_url,

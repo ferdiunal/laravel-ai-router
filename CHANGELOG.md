@@ -1,13 +1,13 @@
 # Changelog
 
-All notable changes to `ai-dev-api` will be documented in this file.
+All notable changes to `laravel-ai-router` will be documented in this file.
 
 ## 0.1.0 - Unreleased
 
-- Added the `ai-dev-api` Laravel AI text provider and driver registration.
+- Added the `laravel-ai-router` Laravel AI text provider and driver registration.
 - Added `auto` model routing with provider key selection, rate windows, cooldowns, and fallback penalties.
 - Added encrypted provider key management commands using Laravel Prompts.
-- Added provider + label based free model cache and `AiDevApiProvider::models()` access.
+- Added provider + label based free model cache and `LaravelAiRouterProvider::models()` access.
 - Added OpenAI-compatible non-streaming and streaming text gateway support.
 - Added usage logging, analytics command, and provider/model/error breakdowns.
 - Added SQLite optimizer with config-controlled PRAGMA settings.

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
+use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
 
 it('defines requested openai-compatible provider endpoints', function (string $platform, string $baseUrl) {
     expect(ProviderCatalog::get($platform)['base_url'])->toBe($baseUrl);

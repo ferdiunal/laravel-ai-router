@@ -2,35 +2,35 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Models\AiDevApiModel;
-use Ferdiunal\AiDevApi\Tests\TestCase;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterModel;
+use Ferdiunal\LaravelAiRouter\Tests\TestCase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 it('prepares hidden sqlite storage and internal migrations without option flags', function () {
     /** @var TestCase $this */
-    $database = storage_path('framework/testing/ai-dev-api-install.sqlite');
+    $database = storage_path('framework/testing/laravel-ai-router-install.sqlite');
     if (file_exists($database)) {
         unlink($database);
     }
 
-    config()->set('ai-dev-api.database.connection', 'ai-dev-api');
-    config()->set('ai-dev-api.database.sqlite.database', $database);
-    config()->set('database.connections.ai-dev-api', [
+    config()->set('laravel-ai-router.database.connection', 'laravel-ai-router');
+    config()->set('laravel-ai-router.database.sqlite.database', $database);
+    config()->set('database.connections.laravel-ai-router', [
         'driver' => 'sqlite',
         'database' => $database,
         'prefix' => '',
         'foreign_key_constraints' => true,
     ]);
-    DB::purge('ai-dev-api');
+    DB::purge('laravel-ai-router');
 
-    $this->artisan('ai-dev-api:install')
-        ->expectsOutputToContain('AI Dev API install flow completed.')
+    $this->artisan('laravel-ai-router:install')
+        ->expectsOutputToContain('Laravel AI Router install flow completed.')
         ->assertSuccessful();
 
     expect(file_exists($database))->toBeTrue();
-    expect(Schema::connection('ai-dev-api')->hasTable('ai_dev_api_models'))->toBeTrue();
-    expect(Schema::connection('ai-dev-api')->hasTable('ai_dev_api_provider_keys'))->toBeTrue();
-    expect(Schema::connection('ai-dev-api')->hasTable('ai_dev_api_provider_model_caches'))->toBeTrue();
-    expect(AiDevApiModel::query()->count())->toBeGreaterThan(0);
+    expect(Schema::connection('laravel-ai-router')->hasTable('laravel_ai_router_models'))->toBeTrue();
+    expect(Schema::connection('laravel-ai-router')->hasTable('laravel_ai_router_provider_keys'))->toBeTrue();
+    expect(Schema::connection('laravel-ai-router')->hasTable('laravel_ai_router_provider_model_caches'))->toBeTrue();
+    expect(LaravelAiRouterModel::query()->count())->toBeGreaterThan(0);
 });

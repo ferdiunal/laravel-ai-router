@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Support\KeyMasker;
+use Ferdiunal\LaravelAiRouter\Support\KeyMasker;
 
 it('masks provider keys without leaking short secrets', function () {
     expect(KeyMasker::mask('abc'))->toBe('****')

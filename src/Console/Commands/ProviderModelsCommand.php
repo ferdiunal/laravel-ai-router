@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Console\Commands;
+namespace Ferdiunal\LaravelAiRouter\Console\Commands;
 
-use Ferdiunal\AiDevApi\Console\Concerns\InteractsWithProviderPrompts;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderModelCache;
-use Ferdiunal\AiDevApi\Services\ModelPreferenceManager;
-use Ferdiunal\AiDevApi\Services\ProviderModelCacheService;
+use Ferdiunal\LaravelAiRouter\Console\Concerns\InteractsWithProviderPrompts;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderModelCache;
+use Ferdiunal\LaravelAiRouter\Services\ModelPreferenceManager;
+use Ferdiunal\LaravelAiRouter\Services\ProviderModelCacheService;
 use Illuminate\Console\Command;
 
 use function Laravel\Prompts\info;
@@ -21,7 +21,7 @@ final class ProviderModelsCommand extends Command
 {
     use InteractsWithProviderPrompts;
 
-    protected $signature = 'ai-dev-api:provider:models';
+    protected $signature = 'laravel-ai-router:provider:models';
 
     protected $description = 'List, refresh, search, and select cached free models for a provider key.';
 
@@ -44,7 +44,7 @@ final class ProviderModelsCommand extends Command
         }
 
         $rows = collect($modelCache->cachedModelsForKey($key))
-            ->map(fn (AiDevApiProviderModelCache $model): array => [
+            ->map(fn (LaravelAiRouterProviderModelCache $model): array => [
                 $model->model_id,
                 $model->display_name ?? '-',
                 (string) ($model->context_window ?? '-'),

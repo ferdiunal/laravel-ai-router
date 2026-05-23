@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Adapters;
+namespace Ferdiunal\LaravelAiRouter\Adapters;
 
-use Ferdiunal\AiDevApi\Adapters\Contracts\ProviderAdapter;
-use Ferdiunal\AiDevApi\Exceptions\ProviderAuthenticationException;
-use Ferdiunal\AiDevApi\Support\ProviderDefinitionValidator;
+use Ferdiunal\LaravelAiRouter\Adapters\Contracts\ProviderAdapter;
+use Ferdiunal\LaravelAiRouter\Exceptions\ProviderAuthenticationException;
+use Ferdiunal\LaravelAiRouter\Support\ProviderDefinitionValidator;
 use Generator;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;

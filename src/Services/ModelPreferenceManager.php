@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Services;
+namespace Ferdiunal\LaravelAiRouter\Services;
 
-use Ferdiunal\AiDevApi\Models\AiDevApiSetting;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterSetting;
 use Illuminate\Database\QueryException;
 use Throwable;
 
@@ -21,7 +21,7 @@ final class ModelPreferenceManager
     public function defaultTextModel(string $fallback = 'auto'): string
     {
         try {
-            $setting = AiDevApiSetting::query()->find(self::DEFAULT_TEXT_MODEL_KEY);
+            $setting = LaravelAiRouterSetting::query()->find(self::DEFAULT_TEXT_MODEL_KEY);
         } catch (QueryException) {
             return $fallback;
         } catch (Throwable) {
@@ -40,7 +40,7 @@ final class ModelPreferenceManager
     {
         $modelId = trim($modelId) !== '' ? trim($modelId) : 'auto';
 
-        AiDevApiSetting::query()->updateOrCreate(
+        LaravelAiRouterSetting::query()->updateOrCreate(
             ['key' => self::DEFAULT_TEXT_MODEL_KEY],
             ['value' => ['model_id' => $modelId]],
         );
@@ -51,6 +51,6 @@ final class ModelPreferenceManager
      */
     public function clearDefaultTextModel(): void
     {
-        AiDevApiSetting::query()->whereKey(self::DEFAULT_TEXT_MODEL_KEY)->delete();
+        LaravelAiRouterSetting::query()->whereKey(self::DEFAULT_TEXT_MODEL_KEY)->delete();
     }
 }

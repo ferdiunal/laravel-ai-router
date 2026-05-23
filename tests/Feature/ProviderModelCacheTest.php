@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\AiDevApiProvider;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderModelCache;
-use Ferdiunal\AiDevApi\Services\ProviderKeyManager;
-use Ferdiunal\AiDevApi\Services\ProviderModelCacheService;
+use Ferdiunal\LaravelAiRouter\LaravelAiRouterProvider;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderModelCache;
+use Ferdiunal\LaravelAiRouter\Services\ProviderKeyManager;
+use Ferdiunal\LaravelAiRouter\Services\ProviderModelCacheService;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\AiManager;
 
-function migrateAiDevApiForCacheTests(): void
+function migrateLaravelAiRouterForCacheTests(): void
 {
     foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
@@ -19,7 +19,7 @@ function migrateAiDevApiForCacheTests(): void
 }
 
 it('caches supported free models by provider and label when a key is added', function () {
-    migrateAiDevApiForCacheTests();
+    migrateLaravelAiRouterForCacheTests();
 
     Http::fake([
         'https://openrouter.ai/api/v1/models' => Http::response([
@@ -32,27 +32,27 @@ it('caches supported free models by provider and label when a key is added', fun
 
     $key = app(ProviderKeyManager::class)->add('openrouter', 'key-openrouter-value-123456', 'Primary', refreshModels: true);
 
-    expect($key)->toBeInstanceOf(AiDevApiProviderKey::class)
+    expect($key)->toBeInstanceOf(LaravelAiRouterProviderKey::class)
         ->and($key->platform)->toBe('openrouter')
         ->and($key->label)->toBe('Primary')
-        ->and(AiDevApiProviderModelCache::query()->where('provider_key_id', $key->getKey())->pluck('model_id')->all())
+        ->and(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->pluck('model_id')->all())
         ->toBe(['qwen/qwen3-coder:free']);
 
-    $provider = app(AiManager::class)->textProvider('ai-dev-api');
+    $provider = app(AiManager::class)->textProvider('laravel-ai-router');
 
-    expect($provider)->toBeInstanceOf(AiDevApiProvider::class);
-    assert($provider instanceof AiDevApiProvider);
+    expect($provider)->toBeInstanceOf(LaravelAiRouterProvider::class);
+    assert($provider instanceof LaravelAiRouterProvider);
     expect($provider->models('openrouter', 'Primary'))->toBe(['auto', 'qwen/qwen3-coder:free']);
 });
 
 it('falls back to curated models when a provider cannot return a live model list', function () {
-    migrateAiDevApiForCacheTests();
+    migrateLaravelAiRouterForCacheTests();
 
     Http::fake([
         'https://openrouter.ai/api/v1/models' => Http::response(['error' => ['message' => 'offline']], 503),
     ]);
 
-    $key = AiDevApiProviderKey::query()->create([
+    $key = LaravelAiRouterProviderKey::query()->create([
         'platform' => 'openrouter',
         'label' => 'Fallback',
         'key' => 'key-openrouter-value-abcdef',
@@ -62,19 +62,19 @@ it('falls back to curated models when a provider cannot return a live model list
 
     app(ProviderModelCacheService::class)->refreshForKey($key);
 
-    expect(AiDevApiProviderModelCache::query()->where('provider_key_id', $key->getKey())->where('source', 'curated')->count())
+    expect(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->where('source', 'curated')->count())
         ->toBeGreaterThan(0);
     expect($key->refresh()->status)->toBe('unknown');
 });
 
 it('marks provider keys invalid on model refresh auth failures without falling back to curated cache', function () {
-    migrateAiDevApiForCacheTests();
+    migrateLaravelAiRouterForCacheTests();
 
     Http::fake([
         'https://openrouter.ai/api/v1/models' => Http::response(['error' => ['message' => 'invalid api key']], 401),
     ]);
 
-    $key = AiDevApiProviderKey::query()->create([
+    $key = LaravelAiRouterProviderKey::query()->create([
         'platform' => 'openrouter',
         'label' => 'Invalid',
         'key' => 'key-openrouter-value-invalid',
@@ -87,13 +87,13 @@ it('marks provider keys invalid on model refresh auth failures without falling b
     expect($rows)->toBe([]);
     expect($key->refresh()->status)->toBe('invalid');
     expect($key->last_checked_at)->not->toBeNull();
-    expect(AiDevApiProviderModelCache::query()->where('provider_key_id', $key->getKey())->where('enabled', true)->count())->toBe(0);
+    expect(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->where('enabled', true)->count())->toBe(0);
 });
 
 it('does not cache models for providers without a routable adapter', function () {
-    migrateAiDevApiForCacheTests();
+    migrateLaravelAiRouterForCacheTests();
 
-    $key = AiDevApiProviderKey::query()->create([
+    $key = LaravelAiRouterProviderKey::query()->create([
         'platform' => 'google',
         'label' => 'Unsupported',
         'key' => 'key-google-value-123456',
@@ -102,13 +102,13 @@ it('does not cache models for providers without a routable adapter', function ()
     ]);
 
     expect(app(ProviderModelCacheService::class)->refreshForKey($key))->toBe([]);
-    expect(AiDevApiProviderModelCache::query()->where('provider_key_id', $key->getKey())->count())->toBe(0);
+    expect(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->count())->toBe(0);
 });
 
 it('excludes expired provider label model cache rows from model listings', function () {
-    migrateAiDevApiForCacheTests();
+    migrateLaravelAiRouterForCacheTests();
 
-    $key = AiDevApiProviderKey::query()->create([
+    $key = LaravelAiRouterProviderKey::query()->create([
         'platform' => 'openrouter',
         'label' => 'Primary',
         'key' => 'key-openrouter-value-expired',
@@ -118,7 +118,7 @@ it('excludes expired provider label model cache rows from model listings', funct
         'models_cache_expires_at' => now()->subMinute(),
     ]);
 
-    AiDevApiProviderModelCache::query()->create([
+    LaravelAiRouterProviderModelCache::query()->create([
         'provider_key_id' => $key->getKey(),
         'platform' => 'openrouter',
         'provider_label' => 'Primary',
@@ -130,21 +130,21 @@ it('excludes expired provider label model cache rows from model listings', funct
         'checked_at' => now()->subDays(2),
     ]);
 
-    $provider = app(AiManager::class)->textProvider('ai-dev-api');
+    $provider = app(AiManager::class)->textProvider('laravel-ai-router');
     $modelCache = app(ProviderModelCacheService::class);
 
-    expect($provider)->toBeInstanceOf(AiDevApiProvider::class);
-    assert($provider instanceof AiDevApiProvider);
+    expect($provider)->toBeInstanceOf(LaravelAiRouterProvider::class);
+    assert($provider instanceof LaravelAiRouterProvider);
     expect($provider->models('openrouter', 'Primary', includeAuto: false))->toBe([]);
     expect($modelCache->cachedModelsForKey($key))->toBe([]);
     expect($modelCache->choicesForKey($key))->toBe(['auto' => 'Auto — route requests across healthy cached free models']);
 });
 
 it('exposes cached model choices only for routable healthy provider keys', function () {
-    migrateAiDevApiForCacheTests();
+    migrateLaravelAiRouterForCacheTests();
 
-    $makeKeyWithCache = function (string $platform, string $label, string $status = 'healthy', bool $enabled = true): AiDevApiProviderKey {
-        $key = AiDevApiProviderKey::query()->create([
+    $makeKeyWithCache = function (string $platform, string $label, string $status = 'healthy', bool $enabled = true): LaravelAiRouterProviderKey {
+        $key = LaravelAiRouterProviderKey::query()->create([
             'platform' => $platform,
             'label' => $label,
             'key' => 'key-'.$platform.'-'.$label.'-value-123456',
@@ -154,7 +154,7 @@ it('exposes cached model choices only for routable healthy provider keys', funct
             'models_cache_expires_at' => now()->addHour(),
         ]);
 
-        AiDevApiProviderModelCache::query()->create([
+        LaravelAiRouterProviderModelCache::query()->create([
             'provider_key_id' => $key->getKey(),
             'platform' => $platform,
             'provider_label' => $label,

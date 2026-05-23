@@ -2,23 +2,23 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
-use Ferdiunal\AiDevApi\Models\AiDevApiFallback;
-use Ferdiunal\AiDevApi\Models\AiDevApiModel;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderDefinition;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderModelCache;
-use Ferdiunal\AiDevApi\Services\ProviderDefinitionManager;
-use Ferdiunal\AiDevApi\Services\ProviderKeyManager;
-use Ferdiunal\AiDevApi\Services\ProviderModelCacheService;
-use Ferdiunal\AiDevApi\Tests\TestCase;
+use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterFallback;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterModel;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderDefinition;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderModelCache;
+use Ferdiunal\LaravelAiRouter\Services\ProviderDefinitionManager;
+use Ferdiunal\LaravelAiRouter\Services\ProviderKeyManager;
+use Ferdiunal\LaravelAiRouter\Services\ProviderModelCacheService;
+use Ferdiunal\LaravelAiRouter\Tests\TestCase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Promptable;
 
-function migrateAiDevApiForCustomProviderTests(): void
+function migrateLaravelAiRouterForCustomProviderTests(): void
 {
     foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
@@ -28,9 +28,9 @@ function migrateAiDevApiForCustomProviderTests(): void
 
 it('runs the prompt-driven custom provider definition add command without option flags', function () {
     /** @var TestCase $this */
-    migrateAiDevApiForCustomProviderTests();
+    migrateLaravelAiRouterForCustomProviderTests();
 
-    $this->artisan('ai-dev-api:provider-definition:add')
+    $this->artisan('laravel-ai-router:provider-definition:add')
         ->expectsOutputToContain('Added custom-openai')
         ->assertSuccessful();
 
@@ -43,12 +43,12 @@ it('runs the prompt-driven custom provider definition add command without option
 });
 
 it('routes prompts through config-defined custom OpenAI-compatible providers', function () {
-    migrateAiDevApiForCustomProviderTests();
+    migrateLaravelAiRouterForCustomProviderTests();
 
-    config()->set('ai-dev-api.providers.custom.acme-openai', [
+    config()->set('laravel-ai-router.providers.custom.acme-openai', [
         'name' => 'Acme OpenAI Proxy',
         'base_url' => 'https://example.com/acme/v1',
-        'headers' => ['X-Proxy-Source' => 'ai-dev-api'],
+        'headers' => ['X-Proxy-Source' => 'laravel-ai-router'],
         'timeout_ms' => 25_000,
     ]);
 
@@ -60,7 +60,7 @@ it('routes prompts through config-defined custom OpenAI-compatible providers', f
             'timeout_ms' => 25_000,
         ]);
 
-    AiDevApiModel::query()->create([
+    LaravelAiRouterModel::query()->create([
         'platform' => 'acme-openai',
         'model_id' => 'acme/free-model:free',
         'display_name' => 'Acme Free Model',
@@ -70,7 +70,7 @@ it('routes prompts through config-defined custom OpenAI-compatible providers', f
         'enabled' => true,
     ]);
 
-    AiDevApiProviderKey::query()->create([
+    LaravelAiRouterProviderKey::query()->create([
         'platform' => 'acme-openai',
         'label' => 'Primary',
         'key' => 'key-acme-value-123456',
@@ -103,19 +103,19 @@ it('routes prompts through config-defined custom OpenAI-compatible providers', f
         }
     };
 
-    $response = $agent->prompt('ping', provider: 'ai-dev-api', model: 'acme/free-model:free');
+    $response = $agent->prompt('ping', provider: 'laravel-ai-router', model: 'acme/free-model:free');
 
     expect((string) $response)->toBe('Custom çalışıyor');
 
     Http::assertSent(function (Request $request): bool {
         return $request->url() === 'https://example.com/acme/v1/chat/completions'
             && $request->hasHeader('Authorization', 'Bearer key-acme-value-123456')
-            && $request->hasHeader('X-Proxy-Source', 'ai-dev-api');
+            && $request->hasHeader('X-Proxy-Source', 'laravel-ai-router');
     });
 });
 
 it('adds runtime custom OpenAI-compatible providers and caches their routable free models', function () {
-    migrateAiDevApiForCustomProviderTests();
+    migrateLaravelAiRouterForCustomProviderTests();
 
     app(ProviderDefinitionManager::class)->addOpenAiCompatible(
         platform: 'runtime-openai',
@@ -137,14 +137,14 @@ it('adds runtime custom OpenAI-compatible providers and caches their routable fr
     $key = app(ProviderKeyManager::class)->add('runtime-openai', 'key-runtime-value-123456', 'Runtime', refreshModels: true);
 
     expect($key->platform)->toBe('runtime-openai')
-        ->and(AiDevApiProviderModelCache::query()->where('provider_key_id', $key->getKey())->pluck('model_id')->all())
+        ->and(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->pluck('model_id')->all())
         ->toBe(['runtime/free-model:free'])
-        ->and(AiDevApiModel::query()->where('platform', 'runtime-openai')->where('model_id', 'runtime/free-model:free')->exists())
+        ->and(LaravelAiRouterModel::query()->where('platform', 'runtime-openai')->where('model_id', 'runtime/free-model:free')->exists())
         ->toBeTrue();
 });
 
 it('rejects unsafe or colliding custom provider definitions', function (string $platform, string $baseUrl, string $field) {
-    migrateAiDevApiForCustomProviderTests();
+    migrateLaravelAiRouterForCustomProviderTests();
 
     app(ProviderDefinitionManager::class)->addOpenAiCompatible(
         platform: $platform,
@@ -161,7 +161,7 @@ it('rejects unsafe or colliding custom provider definitions', function (string $
 ])->throws(ValidationException::class);
 
 it('rejects auth-bearing extra headers on custom provider definitions', function () {
-    migrateAiDevApiForCustomProviderTests();
+    migrateLaravelAiRouterForCustomProviderTests();
 
     app(ProviderDefinitionManager::class)->addOpenAiCompatible(
         platform: 'header-openai',
@@ -172,7 +172,7 @@ it('rejects auth-bearing extra headers on custom provider definitions', function
 })->throws(ValidationException::class);
 
 it('rejects non-global reserved IP base URLs on custom provider definitions', function (string $baseUrl) {
-    migrateAiDevApiForCustomProviderTests();
+    migrateLaravelAiRouterForCustomProviderTests();
 
     app(ProviderDefinitionManager::class)->addOpenAiCompatible(
         platform: 'reserved-openai',
@@ -195,7 +195,7 @@ it('rejects non-global reserved IP base URLs on custom provider definitions', fu
 ])->throws(ValidationException::class);
 
 it('rejects auth-bearing extra header variants on custom provider definitions', function (array $headers) {
-    migrateAiDevApiForCustomProviderTests();
+    migrateLaravelAiRouterForCustomProviderTests();
 
     app(ProviderDefinitionManager::class)->addOpenAiCompatible(
         platform: 'variant-header-openai',
@@ -223,9 +223,9 @@ it('rejects auth-bearing extra header variants on custom provider definitions', 
 ])->throws(ValidationException::class);
 
 it('rejects runtime provider definitions that collide with config custom providers', function () {
-    migrateAiDevApiForCustomProviderTests();
+    migrateLaravelAiRouterForCustomProviderTests();
 
-    config()->set('ai-dev-api.providers.custom.config-openai', [
+    config()->set('laravel-ai-router.providers.custom.config-openai', [
         'name' => 'Config OpenAI Proxy',
         'base_url' => 'https://example.com/config/v1',
     ]);
@@ -238,14 +238,14 @@ it('rejects runtime provider definitions that collide with config custom provide
 })->throws(ValidationException::class);
 
 it('keeps config custom provider definitions ahead of pre-existing runtime slug collisions', function () {
-    migrateAiDevApiForCustomProviderTests();
+    migrateLaravelAiRouterForCustomProviderTests();
 
-    config()->set('ai-dev-api.providers.custom.shadow-openai', [
+    config()->set('laravel-ai-router.providers.custom.shadow-openai', [
         'name' => 'Config Shadow Proxy',
         'base_url' => 'https://example.com/config-shadow/v1',
     ]);
 
-    AiDevApiProviderDefinition::query()->create([
+    LaravelAiRouterProviderDefinition::query()->create([
         'platform' => 'shadow-openai',
         'name' => 'Runtime Shadow Proxy',
         'adapter' => 'openai-compatible',
@@ -264,7 +264,7 @@ it('keeps config custom provider definitions ahead of pre-existing runtime slug 
 });
 
 it('ignores config custom provider definitions with auth-bearing extra headers', function () {
-    config()->set('ai-dev-api.providers.custom.bad-header-openai', [
+    config()->set('laravel-ai-router.providers.custom.bad-header-openai', [
         'name' => 'Bad Header OpenAI Proxy',
         'base_url' => 'https://example.com/bad-header/v1',
         'headers' => ['X-Api-Key' => 'plaintext-secret'],
@@ -274,7 +274,7 @@ it('ignores config custom provider definitions with auth-bearing extra headers',
 })->throws(InvalidArgumentException::class);
 
 it('deactivates runtime artifacts when a custom provider definition is disabled or removed', function () {
-    migrateAiDevApiForCustomProviderTests();
+    migrateLaravelAiRouterForCustomProviderTests();
 
     $definitions = app(ProviderDefinitionManager::class);
     $definition = $definitions->addOpenAiCompatible(
@@ -298,10 +298,10 @@ it('deactivates runtime artifacts when a custom provider definition is disabled 
 
     $definitions->setEnabled((int) $definition->getKey(), false);
 
-    expect(AiDevApiProviderKey::query()->whereKey($key->getKey())->value('enabled'))->toBeFalse()
-        ->and(AiDevApiProviderModelCache::query()->where('platform', 'cleanup-openai')->where('enabled', true)->exists())->toBeFalse()
-        ->and(AiDevApiModel::query()->where('platform', 'cleanup-openai')->where('enabled', true)->exists())->toBeFalse()
-        ->and(AiDevApiFallback::query()->whereIn('ai_dev_api_model_id', AiDevApiModel::query()->where('platform', 'cleanup-openai')->pluck('id'))->where('enabled', true)->exists())->toBeFalse()
+    expect(LaravelAiRouterProviderKey::query()->whereKey($key->getKey())->value('enabled'))->toBeFalse()
+        ->and(LaravelAiRouterProviderModelCache::query()->where('platform', 'cleanup-openai')->where('enabled', true)->exists())->toBeFalse()
+        ->and(LaravelAiRouterModel::query()->where('platform', 'cleanup-openai')->where('enabled', true)->exists())->toBeFalse()
+        ->and(LaravelAiRouterFallback::query()->whereIn('laravel_ai_router_model_id', LaravelAiRouterModel::query()->where('platform', 'cleanup-openai')->pluck('id'))->where('enabled', true)->exists())->toBeFalse()
         ->and(app(ProviderModelCacheService::class)->modelIds('cleanup-openai', 'Cleanup', includeAuto: false))->toBe([])
         ->and(app(ProviderModelCacheService::class)->firstAvailableModelId())->not->toBe('cleanup/free-model:free');
 
@@ -323,14 +323,14 @@ it('deactivates runtime artifacts when a custom provider definition is disabled 
 
     $definitions->remove((int) $definition->getKey());
 
-    expect(AiDevApiProviderKey::query()->where('platform', 'remove-openai')->where('enabled', true)->exists())->toBeFalse()
-        ->and(AiDevApiProviderModelCache::query()->where('platform', 'remove-openai')->where('enabled', true)->exists())->toBeFalse()
-        ->and(AiDevApiModel::query()->where('platform', 'remove-openai')->where('enabled', true)->exists())->toBeFalse()
+    expect(LaravelAiRouterProviderKey::query()->where('platform', 'remove-openai')->where('enabled', true)->exists())->toBeFalse()
+        ->and(LaravelAiRouterProviderModelCache::query()->where('platform', 'remove-openai')->where('enabled', true)->exists())->toBeFalse()
+        ->and(LaravelAiRouterModel::query()->where('platform', 'remove-openai')->where('enabled', true)->exists())->toBeFalse()
         ->and(app(ProviderModelCacheService::class)->modelIds('remove-openai', 'Remove', includeAuto: false))->toBe([]);
 });
 
 it('re-enables an existing custom fallback when runtime models are refreshed after a provider is re-enabled', function () {
-    migrateAiDevApiForCustomProviderTests();
+    migrateLaravelAiRouterForCustomProviderTests();
 
     $definitions = app(ProviderDefinitionManager::class);
     $definition = $definitions->addOpenAiCompatible(
@@ -348,7 +348,7 @@ it('re-enables an existing custom fallback when runtime models are refreshed aft
     ]);
 
     $key = app(ProviderKeyManager::class)->add('reactivate-openai', 'key-reactivate-value-123456', 'Reactivate', refreshModels: true);
-    $model = AiDevApiModel::query()->where('platform', 'reactivate-openai')->where('model_id', 'reactivate/free-model:free')->firstOrFail();
+    $model = LaravelAiRouterModel::query()->where('platform', 'reactivate-openai')->where('model_id', 'reactivate/free-model:free')->firstOrFail();
 
     $definitions->setEnabled((int) $definition->getKey(), false);
     $definitions->setEnabled((int) $definition->getKey(), true);
@@ -356,5 +356,5 @@ it('re-enables an existing custom fallback when runtime models are refreshed aft
 
     app(ProviderModelCacheService::class)->refreshForKey($key->refresh());
 
-    expect(AiDevApiFallback::query()->where('ai_dev_api_model_id', $model->getKey())->value('enabled'))->toBeTrue();
+    expect(LaravelAiRouterFallback::query()->where('laravel_ai_router_model_id', $model->getKey())->value('enabled'))->toBeTrue();
 });

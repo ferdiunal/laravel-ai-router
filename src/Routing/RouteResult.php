@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Routing;
+namespace Ferdiunal\LaravelAiRouter\Routing;
 
 /**
  * Carries the resolved provider, model, database row, credential, and label selected for a routed request.

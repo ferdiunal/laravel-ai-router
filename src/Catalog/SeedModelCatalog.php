@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Catalog;
+namespace Ferdiunal\LaravelAiRouter\Catalog;
 
-use Ferdiunal\AiDevApi\Models\AiDevApiFallback;
-use Ferdiunal\AiDevApi\Models\AiDevApiModel;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterFallback;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterModel;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -18,9 +18,9 @@ final class SeedModelCatalog
      */
     public function seed(): void
     {
-        DB::connection(config('ai-dev-api.database.connection') ?: 'ai-dev-api')->transaction(function (): void {
+        DB::connection(config('laravel-ai-router.database.connection') ?: 'laravel-ai-router')->transaction(function (): void {
             foreach (ModelCatalog::all() as $model) {
-                AiDevApiModel::query()->updateOrCreate(
+                LaravelAiRouterModel::query()->updateOrCreate(
                     [
                         'platform' => $model['platform'],
                         'model_id' => $model['model_id'],
@@ -40,22 +40,22 @@ final class SeedModelCatalog
                 );
             }
 
-            $nextPriority = ((int) AiDevApiFallback::query()->max('priority')) + 1;
+            $nextPriority = ((int) LaravelAiRouterFallback::query()->max('priority')) + 1;
 
-            AiDevApiModel::query()
+            LaravelAiRouterModel::query()
                 ->orderBy('intelligence_rank')
                 ->orderBy('id')
-                ->each(function (AiDevApiModel $model) use (&$nextPriority): void {
-                    $exists = AiDevApiFallback::query()
-                        ->where('ai_dev_api_model_id', $model->getKey())
+                ->each(function (LaravelAiRouterModel $model) use (&$nextPriority): void {
+                    $exists = LaravelAiRouterFallback::query()
+                        ->where('laravel_ai_router_model_id', $model->getKey())
                         ->exists();
 
                     if ($exists) {
                         return;
                     }
 
-                    AiDevApiFallback::query()->create([
-                        'ai_dev_api_model_id' => $model->getKey(),
+                    LaravelAiRouterFallback::query()->create([
+                        'laravel_ai_router_model_id' => $model->getKey(),
                         'priority' => $nextPriority++,
                         'enabled' => true,
                         'penalty' => 0,

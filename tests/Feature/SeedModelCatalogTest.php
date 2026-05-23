@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Catalog\ModelCatalog;
-use Ferdiunal\AiDevApi\Catalog\SeedModelCatalog;
-use Ferdiunal\AiDevApi\Models\AiDevApiFallback;
-use Ferdiunal\AiDevApi\Models\AiDevApiModel;
+use Ferdiunal\LaravelAiRouter\Catalog\ModelCatalog;
+use Ferdiunal\LaravelAiRouter\Catalog\SeedModelCatalog;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterFallback;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterModel;
 
-function migrateAiDevApiForCatalogTests(): void
+function migrateLaravelAiRouterForCatalogTests(): void
 {
     foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
         $migration = include $migrationFile;
@@ -16,22 +16,22 @@ function migrateAiDevApiForCatalogTests(): void
 }
 
 it('seeds the model catalog and initializes fallback order idempotently', function () {
-    migrateAiDevApiForCatalogTests();
+    migrateLaravelAiRouterForCatalogTests();
 
     app(SeedModelCatalog::class)->seed();
     app(SeedModelCatalog::class)->seed();
 
-    expect(AiDevApiModel::query()->count())->toBe(count(ModelCatalog::all()))
-        ->and(AiDevApiFallback::query()->count())->toBe(count(ModelCatalog::all()))
-        ->and(AiDevApiFallback::query()->orderBy('priority')->pluck('priority')->all())->toBe(range(1, count(ModelCatalog::all())));
+    expect(LaravelAiRouterModel::query()->count())->toBe(count(ModelCatalog::all()))
+        ->and(LaravelAiRouterFallback::query()->count())->toBe(count(ModelCatalog::all()))
+        ->and(LaravelAiRouterFallback::query()->orderBy('priority')->pluck('priority')->all())->toBe(range(1, count(ModelCatalog::all())));
 });
 
 it('preserves an existing fallback priority while adding missing model rows', function () {
-    migrateAiDevApiForCatalogTests();
+    migrateLaravelAiRouterForCatalogTests();
 
     app(SeedModelCatalog::class)->seed();
 
-    $first = AiDevApiFallback::query()->orderBy('priority')->firstOrFail();
+    $first = LaravelAiRouterFallback::query()->orderBy('priority')->firstOrFail();
     $first->forceFill(['priority' => 99])->save();
 
     app(SeedModelCatalog::class)->seed();

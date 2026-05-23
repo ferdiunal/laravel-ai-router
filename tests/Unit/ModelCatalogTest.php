@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Catalog\ModelCatalog;
-use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
+use Ferdiunal\LaravelAiRouter\Catalog\ModelCatalog;
+use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
 
 it('seeds only models for registered platforms', function () {
     $platforms = array_keys(ProviderCatalog::all());

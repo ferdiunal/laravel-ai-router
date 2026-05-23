@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Adapters;
+namespace Ferdiunal\LaravelAiRouter\Adapters;
 
-use Ferdiunal\AiDevApi\Adapters\Contracts\ProviderAdapter;
-use Ferdiunal\AiDevApi\Catalog\ProviderCatalog;
-use Ferdiunal\AiDevApi\Support\ProviderDefinitionValidator;
+use Ferdiunal\LaravelAiRouter\Adapters\Contracts\ProviderAdapter;
+use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
+use Ferdiunal\LaravelAiRouter\Support\ProviderDefinitionValidator;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -44,8 +44,8 @@ final class ProviderAdapterRegistry
                 extraHeaders: $this->extraHeaders($platform, $definition),
                 enforcePublicBaseUrl: (bool) ($definition['custom'] ?? false),
                 timeoutMs: (int) ($definition['timeout_ms'] ?? 15_000),
-                maxStreamLineBytes: max(1024, (int) config('ai-dev-api.streaming.max_line_bytes', 65_536)),
-                maxStreamEventBytes: max(1024, (int) config('ai-dev-api.streaming.max_event_bytes', 1_048_576)),
+                maxStreamLineBytes: max(1024, (int) config('laravel-ai-router.streaming.max_line_bytes', 65_536)),
+                maxStreamEventBytes: max(1024, (int) config('laravel-ai-router.streaming.max_event_bytes', 1_048_576)),
             );
         }
 
@@ -61,7 +61,7 @@ final class ProviderAdapterRegistry
     private function extraHeaders(string $platform, array $definition): array
     {
         $headers = $platform === 'openrouter'
-            ? array_filter(config('ai-dev-api.providers.openrouter.headers', []))
+            ? array_filter(config('laravel-ai-router.providers.openrouter.headers', []))
             : ($definition['headers'] ?? []);
 
         return ProviderDefinitionValidator::sanitizeHeaders(is_array($headers) ? $headers : []);

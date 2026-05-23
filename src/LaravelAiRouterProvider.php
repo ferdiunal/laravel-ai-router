@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi;
+namespace Ferdiunal\LaravelAiRouter;
 
-use Ferdiunal\AiDevApi\Services\ModelPreferenceManager;
-use Ferdiunal\AiDevApi\Services\ProviderModelCacheService;
+use Ferdiunal\LaravelAiRouter\Services\ModelPreferenceManager;
+use Ferdiunal\LaravelAiRouter\Services\ProviderModelCacheService;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Providers\Concerns\GeneratesText;
 use Laravel\Ai\Providers\Concerns\HasTextGateway;
@@ -13,9 +13,9 @@ use Laravel\Ai\Providers\Concerns\StreamsText;
 use Laravel\Ai\Providers\Provider;
 
 /**
- * Registers AI Dev API as a Laravel AI text provider facade backed by the package text gateway and model cache.
+ * Registers Laravel AI Router as a Laravel AI text provider facade backed by the package text gateway and model cache.
  */
-final class AiDevApiProvider extends Provider implements TextProvider
+final class LaravelAiRouterProvider extends Provider implements TextProvider
 {
     use GeneratesText;
     use HasTextGateway;
@@ -26,7 +26,7 @@ final class AiDevApiProvider extends Provider implements TextProvider
      */
     public function defaultTextModel(): string
     {
-        $fallback = (string) data_get($this->config, 'models.text.default', config('ai-dev-api.models.text.default', 'auto'));
+        $fallback = (string) data_get($this->config, 'models.text.default', config('laravel-ai-router.models.text.default', 'auto'));
 
         return app(ModelPreferenceManager::class)->defaultTextModel($fallback);
     }

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Services;
+namespace Ferdiunal\LaravelAiRouter\Services;
 
-use Ferdiunal\AiDevApi\Models\AiDevApiRequest;
-use Ferdiunal\AiDevApi\Routing\RouteResult;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterRequest;
+use Ferdiunal\LaravelAiRouter\Routing\RouteResult;
 use Throwable;
 
 /**
@@ -84,7 +84,7 @@ final class UsageLogger
     private function write(array $attributes): void
     {
         try {
-            AiDevApiRequest::query()->create($attributes);
+            LaravelAiRouterRequest::query()->create($attributes);
         } catch (Throwable) {
             // Usage logging must never break user prompt execution.
         }

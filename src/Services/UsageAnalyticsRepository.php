@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Services;
+namespace Ferdiunal\LaravelAiRouter\Services;
 
-use Ferdiunal\AiDevApi\Models\AiDevApiRequest;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterRequest;
 use Illuminate\Support\Collection;
 
 /**
@@ -19,7 +19,7 @@ final class UsageAnalyticsRepository
      */
     public function summary(string $range = '7d'): array
     {
-        $query = AiDevApiRequest::query()->where('created_at', '>=', $this->since($range));
+        $query = LaravelAiRouterRequest::query()->where('created_at', '>=', $this->since($range));
 
         $total = (clone $query)->count();
         $success = (clone $query)->where('status', 'success')->count();
@@ -44,7 +44,7 @@ final class UsageAnalyticsRepository
      */
     public function byProvider(string $range = '7d'): Collection
     {
-        return AiDevApiRequest::query()
+        return LaravelAiRouterRequest::query()
             ->toBase()
             ->selectRaw('platform, provider_label, COUNT(*) as requests, SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as success_count, SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens, AVG(latency_ms) as avg_latency_ms', ['success'])
             ->where('created_at', '>=', $this->since($range))
@@ -60,7 +60,7 @@ final class UsageAnalyticsRepository
      */
     public function byModel(string $range = '7d'): Collection
     {
-        return AiDevApiRequest::query()
+        return LaravelAiRouterRequest::query()
             ->toBase()
             ->selectRaw('platform, model_id, COUNT(*) as requests, SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as success_count, SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens, AVG(latency_ms) as avg_latency_ms', ['success'])
             ->where('created_at', '>=', $this->since($range))
@@ -76,7 +76,7 @@ final class UsageAnalyticsRepository
      */
     public function errors(string $range = '7d'): Collection
     {
-        return AiDevApiRequest::query()
+        return LaravelAiRouterRequest::query()
             ->toBase()
             ->selectRaw('platform, model_id, error_category, COUNT(*) as count')
             ->where('status', 'error')

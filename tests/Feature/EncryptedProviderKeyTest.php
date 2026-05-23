@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Ferdiunal\AiDevApi\Models\AiDevApiProviderKey;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
 
 it('encrypts provider keys and exposes only masked values', function () {
     foreach (glob(__DIR__.'/../../database/migrations/*.php') as $migrationFile) {
@@ -12,7 +12,7 @@ it('encrypts provider keys and exposes only masked values', function () {
 
     $plainKey = 'key-openrouter-value-123456';
 
-    $key = AiDevApiProviderKey::create([
+    $key = LaravelAiRouterProviderKey::create([
         'platform' => 'openrouter',
         'label' => 'Primary',
         'key' => $plainKey,

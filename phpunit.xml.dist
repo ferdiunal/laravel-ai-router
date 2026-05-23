@@ -15,7 +15,7 @@
     backupStaticProperties="false"
 >
     <testsuites>
-        <testsuite name="Ferdiunal AiDevApi Test Suite">
+        <testsuite name="Ferdiunal LaravelAiRouter Test Suite">
             <directory>tests</directory>
         </testsuite>
     </testsuites>

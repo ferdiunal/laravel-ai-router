@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Ferdiunal\AiDevApi\Console\Commands;
+namespace Ferdiunal\LaravelAiRouter\Console\Commands;
 
-use Ferdiunal\AiDevApi\Console\Concerns\InteractsWithProviderPrompts;
-use Ferdiunal\AiDevApi\Services\ProviderKeyManager;
+use Ferdiunal\LaravelAiRouter\Console\Concerns\InteractsWithProviderPrompts;
+use Ferdiunal\LaravelAiRouter\Services\ProviderKeyManager;
 use Illuminate\Console\Command;
 
 use function Laravel\Prompts\info;
@@ -18,7 +18,7 @@ final class ProviderRemoveCommand extends Command
 {
     use InteractsWithProviderPrompts;
 
-    protected $signature = 'ai-dev-api:provider:remove';
+    protected $signature = 'laravel-ai-router:provider:remove';
 
     protected $description = 'Remove a provider key selected by provider and label.';
 

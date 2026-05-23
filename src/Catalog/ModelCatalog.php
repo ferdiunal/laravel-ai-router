@@ -17,8 +17,6 @@ final class ModelCatalog
     public static function all(): array
     {
         return [
-            self::model('google', 'gemini-2.5-flash-lite', 'Gemini 2.5 Flash-Lite', 8, 3, '~120M', 1_048_576, rpm: 15, rpd: 1000, tpm: 250000),
-            self::model('cloudflare', '@cf/meta/llama-3.1-70b-instruct', 'Llama 3.1 70B (CF)', 13, 11, '~18-45M', 131072),
             self::model('cohere', 'command-r-plus-08-2024', 'Command R+ (08-2024)', 12, 11, '~1-2M', 131072, rpm: 20, rpd: 33),
             self::model('groq', 'llama-3.3-70b-versatile', 'Llama 3.3 70B', 9, 2, '~15M', 131072, rpm: 30, rpd: 1000, tpm: 6000, tpd: 500000),
             self::model('cerebras', 'qwen3-235b', 'Qwen3 235B', 3, 1, '~30M', 8192, rpm: 30, tpm: 60000, tpd: 1000000),

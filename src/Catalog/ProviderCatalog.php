@@ -40,20 +40,6 @@ final class ProviderCatalog
     public static function builtIn(): array
     {
         return [
-            'google' => [
-                'name' => 'Google AI Studio',
-                'adapter' => 'google',
-                'base_url' => 'https://generativelanguage.googleapis.com/v1beta',
-                'requires_placeholder_key' => false,
-                'custom' => false,
-            ],
-            'cloudflare' => [
-                'name' => 'Cloudflare Workers AI',
-                'adapter' => 'cloudflare',
-                'key_format' => 'account_id:api_token',
-                'requires_placeholder_key' => false,
-                'custom' => false,
-            ],
             'cohere' => [
                 'name' => 'Cohere',
                 'adapter' => 'cohere',

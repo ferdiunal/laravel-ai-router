@@ -1,66 +1,175 @@
-# :package_description
+# AI Dev API
 
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/:vendor_slug/:package_slug.svg?style=flat-square)](https://packagist.org/packages/:vendor_slug/:package_slug)
-[![Tests](https://img.shields.io/github/actions/workflow/status/:vendor_slug/:package_slug/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/:vendor_slug/:package_slug/actions/workflows/run-tests.yml)
-[![Total Downloads](https://img.shields.io/packagist/dt/:vendor_slug/:package_slug.svg?style=flat-square)](https://packagist.org/packages/:vendor_slug/:package_slug)
-<!--delete-->
----
-This package can be used as to scaffold a framework agnostic package. Follow these steps to get started:
+Laravel AI SDK için provider/key/model routing paketi. Amaç: birden fazla ücretsiz veya düşük maliyetli OpenAI-compatible provider anahtarını Laravel içinde yönetmek, desteklenen free modelleri provider + label bazında cachelemek, `auto` model routing yapmak ve kullanım istatistiklerini lokal veritabanında tutmak.
 
-1. Press the "Use template" button at the top of this repo to create a new repo with the contents of this skeleton
-2. Run "php ./configure.php" to run a script that will replace all placeholders throughout all the files
-3. Have fun creating your package.
-4. If you need help creating a package, consider picking up our <a href="https://laravelpackage.training">Laravel Package Training</a> video course.
----
-<!--/delete-->
-This is where your description should go. Try and limit it to a paragraph or two. Consider adding a small example.
+## Özellikler
 
-## Support us
+- Laravel AI driver adı: `ai-dev-api`
+- Varsayılan text model: `auto`
+- Provider API key yönetimi: ekle, sil, listele, aktif/pasif yap
+- API key değerleri encrypted saklanır, CLI çıktısında maskelenir
+- Provider + label bazlı free model cache
+- `AiDevApiProvider::models()` ile cachelenmiş model id erişimi
+- Non-streaming ve streaming text gateway desteği
+- Request/usage analytics: provider, label, model, token, latency, error category
+- SQLite için config kontrollü WAL/PRAGMA optimizasyonu
+- Laravel Prompts tabanlı interaktif Artisan komutları
 
-[<img src="https://github-ads.s3.eu-central-1.amazonaws.com/:package_name.jpg?t=1" width="419px" />](https://spatie.be/github-ad-click/:package_name)
-
-We invest a lot of resources into creating [best in class open source packages](https://spatie.be/open-source). You can support us by [buying one of our paid products](https://spatie.be/open-source/support-us).
-
-We highly appreciate you sending us a postcard from your hometown, mentioning which of our package(s) you are using. You'll find our address on [our contact page](https://spatie.be/about-us). We publish all received postcards on [our virtual postcard wall](https://spatie.be/open-source/postcards).
-
-## Installation
-
-You can install the package via composer:
+## Kurulum
 
 ```bash
-composer require :vendor_slug/:package_slug
+composer require ferdiunal/ai-dev-api
+php artisan ai-dev-api:install
 ```
 
-## Usage
+Install komutu config/migration publish eder, migration çalıştırmayı sorar, model catalog seed eder ve SQLite kullanılıyorsa optimizer uygular.
+
+Manuel publish istersen:
+
+```bash
+php artisan vendor:publish --tag=ai-dev-api-config
+php artisan vendor:publish --tag=ai-dev-api-migrations
+php artisan migrate
+```
+
+## Laravel AI config
+
+`config/ai.php` içinde provider kaydı:
 
 ```php
-$skeleton = new VendorName\Skeleton();
-echo $skeleton->echoPhrase('Hello, VendorName!');
+'providers' => [
+    'ai-dev-api' => [
+        'driver' => 'ai-dev-api',
+    ],
+],
+
+'default' => 'ai-dev-api',
 ```
 
-## Testing
+Paket config varsayılanları `config/ai-dev-api.php` içindedir:
+
+```php
+'driver' => 'ai-dev-api',
+
+'models' => [
+    'text' => [
+        'default' => 'auto',
+    ],
+],
+```
+
+## Provider key yönetimi
+
+Komutlar Laravel Prompts kullanır; interaktif olarak provider, label ve API key alır.
 
 ```bash
-composer test
+php artisan ai-dev-api:provider:add
+php artisan ai-dev-api:provider:list
+php artisan ai-dev-api:provider:models
+php artisan ai-dev-api:provider:enable
+php artisan ai-dev-api:provider:disable
+php artisan ai-dev-api:provider:remove
 ```
+
+Provider key kimliği `provider + label` ile ayrılır. Örneğin aynı `openrouter` provider için `Primary`, `Backup`, `Team` gibi farklı label'lar kullanılabilir.
+
+## Model cache
+
+Bir provider key eklendiğinde veya `provider:models` komutuyla refresh edildiğinde provider'ın desteklediği free modeller cachelenir.
+
+```bash
+php artisan ai-dev-api:provider:models
+```
+
+Kod içinden erişim:
+
+```php
+use Ferdiunal\AiDevApi\AiDevApiProvider;
+use Laravel\Ai\AiManager;
+
+$provider = app(AiManager::class)->textProvider('ai-dev-api');
+
+assert($provider instanceof AiDevApiProvider);
+
+$modelIds = $provider->models('openrouter', 'Primary');
+// ['auto', 'qwen/qwen3-coder:free', ...]
+```
+
+## Prompt kullanımı
+
+Laravel AI agent/prompt akışında model `auto` bırakıldığında router kullanılabilir provider key ve model seçer.
+
+```php
+$response = ai()
+    ->using('ai-dev-api', 'auto')
+    ->prompt('Kısa bir özet çıkar.')
+    ->asText();
+```
+
+Streaming path de desteklenir; OpenAI-compatible SSE chunk'ları Laravel AI stream eventlerine çevrilir.
+
+## Kullanım istatistikleri
+
+```bash
+php artisan ai-dev-api:usage
+```
+
+Tutulan alanlar:
+
+- provider platform
+- provider label
+- model id
+- success/error status
+- input/output/total tokens
+- latency
+- error type/category/message
+
+## SQLite optimizasyonu
+
+SQLite driver kullanıldığında ve config açıksa paket şu PRAGMA ayarlarını uygular:
+
+- `journal_mode = WAL` (`:memory:` hariç)
+- `foreign_keys = ON`
+- `busy_timeout`
+- `synchronous`
+- `temp_store = MEMORY`
+- `cache_size`
+
+Config:
+
+```php
+'database' => [
+    'sqlite' => [
+        'optimize' => true,
+        'journal_mode' => 'WAL',
+        'synchronous' => 'NORMAL',
+        'busy_timeout_ms' => 5000,
+        'cache_size_kb' => 20000,
+    ],
+],
+```
+
+## Test ve kalite kapıları
+
+```bash
+composer format:check
+composer analyse
+composer test
+composer ci
+```
+
+Mevcut statik analiz seviyesi: PHPStan/Larastan level 6.
+
+## Güvenlik notları
+
+- API key'ler encrypted saklanır.
+- CLI listelerinde raw key gösterilmez; masked değer gösterilir.
+- Usage logging hata mesajlarında bearer token redaction uygular.
 
 ## Changelog
 
-Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.
-
-## Contributing
-
-Please see [CONTRIBUTING](https://github.com/spatie/.github/blob/main/CONTRIBUTING.md) for details.
-
-## Security Vulnerabilities
-
-Please review [our security policy](../../security/policy) on how to report security vulnerabilities.
-
-## Credits
-
-- [:author_name](https://github.com/:author_username)
-- [All Contributors](../../contributors)
+Değişiklikler için [CHANGELOG](CHANGELOG.md) dosyasına bak.
 
 ## License
 
-The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
+MIT. Detay için [LICENSE.md](LICENSE.md).

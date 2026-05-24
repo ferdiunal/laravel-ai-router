@@ -23,7 +23,8 @@ final class InstallCommand extends Command
 {
     use InteractsWithProviderPrompts;
 
-    protected $signature = 'laravel-ai-router:install';
+    protected $signature = 'laravel-ai-router:install
+        {--with-provider : Launch the interactive provider key setup wizard after installation.}';
 
     protected $description = 'Prepare Laravel AI Router local storage and optionally add a provider key.';
 
@@ -54,10 +55,14 @@ final class InstallCommand extends Command
         $applied = $sqliteOptimizer->optimize($connection);
         info('SQLite optimizer checked'.($applied === [] ? ' (no-op).' : ': '.implode(', ', $applied)));
 
-        if ($this->shouldPrompt()) {
-            $hasProviderKeys = LaravelAiRouterProviderKey::query()->exists();
-            if (! $hasProviderKeys || $this->confirmPrompt('Add another provider key now?', false)) {
-                $providerWizard->run(true);
+        if ($this->option('with-provider')) {
+            if (! $this->shouldPrompt()) {
+                info('Provider key setup skipped because this execution is non-interactive.');
+            } else {
+                $hasProviderKeys = LaravelAiRouterProviderKey::query()->exists();
+                if (! $hasProviderKeys || $this->confirmPrompt('Add another provider key now?', false)) {
+                    $providerWizard->run(true);
+                }
             }
         }
 
@@ -102,6 +107,7 @@ final class InstallCommand extends Command
             '--path' => dirname(__DIR__, 3).'/database/migrations',
             '--realpath' => true,
             '--force' => true,
+            '--no-interaction' => true,
         ]);
     }
 }

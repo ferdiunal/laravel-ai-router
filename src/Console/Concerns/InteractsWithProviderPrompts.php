@@ -10,6 +10,7 @@ use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderDefinition;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
 
 use function Laravel\Prompts\confirm;
+use function Laravel\Prompts\multiselect;
 use function Laravel\Prompts\password;
 use function Laravel\Prompts\search;
 use function Laravel\Prompts\text;
@@ -96,6 +97,41 @@ trait InteractsWithProviderPrompts
             placeholder: 'Search model id, label, provider, or capability',
             scroll: 10,
         );
+    }
+
+    /**
+     * Render a multi-select model prompt over cached model choices.
+     *
+     * @param  array<string, string>  $options
+     * @param  array<int, string>  $defaultSelected
+     * @return array<int, string>
+     */
+    protected function multiModelPrompt(array $options, array $defaultSelected = [], string $label = 'Which models should participate in random auto routing?'): array
+    {
+        unset($options['auto']);
+
+        if ($options === []) {
+            return [];
+        }
+
+        $modelIds = array_values(array_map('strval', array_keys($options)));
+        $defaultSelected = array_values(array_intersect($defaultSelected, $modelIds));
+
+        if (! $this->shouldPrompt()) {
+            return $defaultSelected;
+        }
+
+        /** @var array<int, string> $selected */
+        $selected = multiselect(
+            label: $label,
+            options: $options,
+            default: $defaultSelected,
+            scroll: 10,
+            required: false,
+            hint: 'Selected models are used by auto/random_provider. Unselected cached models remain available for exact model IDs.',
+        );
+
+        return array_values(array_map('strval', $selected));
     }
 
     /**

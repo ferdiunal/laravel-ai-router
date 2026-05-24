@@ -25,6 +25,7 @@ use Illuminate\Support\Carbon;
  * @property bool|null $supports_tools
  * @property bool $is_free
  * @property bool $enabled
+ * @property bool $auto_enabled
  * @property string $source
  * @property array<string, mixed>|null $raw_metadata
  * @property Carbon|null $checked_at
@@ -52,6 +53,7 @@ final class LaravelAiRouterProviderModelCache extends LaravelAiRouterBaseModel
             'supports_tools' => 'bool',
             'is_free' => 'bool',
             'enabled' => 'bool',
+            'auto_enabled' => 'bool',
             'raw_metadata' => 'array',
             'checked_at' => 'datetime',
         ];

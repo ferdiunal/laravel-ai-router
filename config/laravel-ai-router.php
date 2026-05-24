@@ -13,7 +13,7 @@ return [
     ],
 
     'routing' => [
-        'auto_strategy' => env('LARAVEL_AI_ROUTER_AUTO_STRATEGY', 'random'),
+        'auto_strategy' => env('LARAVEL_AI_ROUTER_AUTO_STRATEGY', 'random_provider'),
         'random_pool_size' => env('LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE', 5),
         'random_priority_window' => env('LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW', 3),
         'random_seed' => env('LARAVEL_AI_ROUTER_RANDOM_SEED'),

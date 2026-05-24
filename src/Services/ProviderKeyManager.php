@@ -6,6 +6,7 @@ namespace Ferdiunal\LaravelAiRouter\Services;
 
 use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderModelCache;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -18,7 +19,10 @@ final class ProviderKeyManager
     /**
      * Initialize the manager with the service that refreshes provider-label model caches.
      */
-    public function __construct(private readonly ProviderModelCacheService $modelCache) {}
+    public function __construct(
+        private readonly ProviderModelCacheService $modelCache,
+        private readonly ProviderModelSelectionManager $modelSelection,
+    ) {}
 
     /**
      * Store an encrypted provider key and optionally refresh its provider-label-scoped model cache.
@@ -64,7 +68,17 @@ final class ProviderKeyManager
         ]);
 
         if ($refreshModels) {
-            $this->modelCache->refreshForKey($key);
+            $rows = $this->modelCache->refreshForKey($key);
+
+            if ($rows !== []) {
+                $this->modelSelection->setSelectedModelIdsForKey(
+                    $key,
+                    array_values(array_unique(array_map(
+                        fn (LaravelAiRouterProviderModelCache $row): string => (string) $row->model_id,
+                        $rows,
+                    ))),
+                );
+            }
         }
 
         return $key->refresh();

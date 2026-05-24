@@ -81,8 +81,8 @@ it('keeps priority auto strategy ordered by effective priority', function () {
         ->and($route->modelId)->toBe('qwen3-235b');
 });
 
-it('defaults auto routing to full random provider and model rotation', function () {
-    expect(config('laravel-ai-router.routing.auto_strategy'))->toBe('random');
+it('defaults auto routing to selected provider-key model rotation', function () {
+    expect(config('laravel-ai-router.routing.auto_strategy'))->toBe('random_provider');
 });
 
 it('random auto strategy shuffles the entire enabled fallback list', function () {

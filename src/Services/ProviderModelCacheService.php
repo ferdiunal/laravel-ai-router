@@ -17,7 +17,7 @@ use Illuminate\Support\Arr;
 use Throwable;
 
 /**
- * Refreshes, filters, and exposes provider-label-scoped available model cache rows for routing and default model selection.
+ * Refreshes, filters, and exposes provider-label-scoped available model cache rows for routing and model selection.
  */
 final class ProviderModelCacheService
 {
@@ -217,7 +217,7 @@ final class ProviderModelCacheService
     }
 
     /**
-     * Return searchable model-choice labels for default model selection from a healthy provider key cache.
+     * Return searchable model-choice labels for auto routing selection from a healthy provider key cache.
      *
      * @return array<string, string>
      */

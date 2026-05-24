@@ -17,10 +17,10 @@ final class ProviderAddCommand extends Command
 
     protected $signature = 'laravel-ai-router:provider:add';
 
-    protected $description = 'Add a provider API key and choose a cached available model using Laravel Prompts.';
+    protected $description = 'Add a provider API key and choose cached available models for random auto routing using Laravel Prompts.';
 
     /**
-     * Launch the provider-key setup wizard and persist the selected provider key and default model preference.
+     * Launch the provider-key setup wizard and persist the selected provider key and auto routing model selection.
      */
     public function handle(ProviderKeySetupWizard $wizard): int
     {

@@ -11,6 +11,9 @@ use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterFallback;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterModel;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderModelCache;
+use Illuminate\Support\Collection;
+use Random\Engine\Mt19937;
+use Random\Randomizer;
 
 /**
  * Selects the best eligible provider key and model for a requested Laravel AI text operation.
@@ -59,30 +62,15 @@ final class ModelRouter
             throw new NoAvailableModelException("No enabled valid key is available for model [{$modelId}].");
         }
 
+        if ($this->autoStrategy() === 'random_provider' && $this->hasProviderModelCacheRows()) {
+            return $this->routeSelectedProviderPool($estimatedTokens, $requiresTools, $excludedKeyIds);
+        }
+
         $fallbacks = LaravelAiRouterFallback::query()
             ->where('enabled', true)
             ->get();
 
-        foreach ($this->candidateSelector->orderedFallbacks($fallbacks) as $fallback) {
-            $model = LaravelAiRouterModel::query()
-                ->whereKey($fallback->laravel_ai_router_model_id)
-                ->where('enabled', true)
-                ->first();
-
-            if (! $model instanceof LaravelAiRouterModel || ! $this->adapters->has($model->platform)) {
-                continue;
-            }
-
-            $key = $this->firstUsableKey($model, $estimatedTokens, $requiresTools, $excludedKeyIds);
-
-            if (! $key instanceof LaravelAiRouterProviderKey) {
-                continue;
-            }
-
-            return $this->toResult($model, $key);
-        }
-
-        throw new NoAvailableModelException('All Laravel AI Router models are exhausted. Add an enabled provider key or wait for limits to reset.');
+        return $this->routeFallbackPool($fallbacks, $estimatedTokens, $requiresTools, $excludedKeyIds);
     }
 
     /**
@@ -137,6 +125,195 @@ final class ModelRouter
             'status' => 'invalid',
             'last_checked_at' => now(),
         ])->save();
+    }
+
+    /**
+     * Route legacy fallback candidates for bootstrap/explicit non-selected strategies.
+     *
+     * @param  Collection<int, LaravelAiRouterFallback>  $fallbacks
+     * @param  array<int, int>  $excludedKeyIds
+     */
+    private function routeFallbackPool(Collection $fallbacks, int $estimatedTokens, bool $requiresTools, array $excludedKeyIds): RouteResult
+    {
+        foreach ($this->candidateSelector->orderedFallbacks($fallbacks) as $fallback) {
+            $model = LaravelAiRouterModel::query()
+                ->whereKey($fallback->laravel_ai_router_model_id)
+                ->where('enabled', true)
+                ->first();
+
+            if (! $model instanceof LaravelAiRouterModel || ! $this->adapters->has($model->platform)) {
+                continue;
+            }
+
+            $key = $this->firstUsableKey($model, $estimatedTokens, $requiresTools, $excludedKeyIds);
+
+            if (! $key instanceof LaravelAiRouterProviderKey) {
+                continue;
+            }
+
+            return $this->toResult($model, $key);
+        }
+
+        throw new NoAvailableModelException('All Laravel AI Router models are exhausted. Add an enabled provider key or wait for limits to reset.');
+    }
+
+    /**
+     * Determine whether a provider model cache has been initialized.
+     */
+    private function hasProviderModelCacheRows(): bool
+    {
+        return LaravelAiRouterProviderModelCache::query()->exists();
+    }
+
+    /**
+     * Route auto requests through the user-selected provider-key/model cache pool.
+     *
+     * @param  array<int, int>  $excludedKeyIds
+     */
+    private function routeSelectedProviderPool(int $estimatedTokens, bool $requiresTools, array $excludedKeyIds): RouteResult
+    {
+        $cacheQuery = LaravelAiRouterProviderModelCache::query()
+            ->with('providerKey')
+            ->where('enabled', true)
+            ->where('auto_enabled', true)
+            ->whereHas('providerKey', function ($query): void {
+                $query->where('enabled', true)
+                    ->where('status', '!=', 'invalid')
+                    ->where(function ($query): void {
+                        $query->whereNull('models_cache_expires_at')
+                            ->orWhere('models_cache_expires_at', '>=', now());
+                    });
+            })
+            ->orderBy('provider_key_id')
+            ->orderBy('model_id');
+
+        if ($excludedKeyIds !== []) {
+            $cacheQuery->whereNotIn('provider_key_id', $excludedKeyIds);
+        }
+
+        $providerGroups = $cacheQuery
+            ->get()
+            ->groupBy(fn (LaravelAiRouterProviderModelCache $cache): int => (int) $cache->provider_key_id)
+            ->values();
+
+        $randomizer = $this->randomizer();
+        $shuffledProviderGroups = collect($randomizer->shuffleArray($providerGroups->all()));
+
+        foreach ($shuffledProviderGroups as $providerGroup) {
+            $shuffledCacheRows = $randomizer->shuffleArray($providerGroup->values()->all());
+
+            foreach ($shuffledCacheRows as $cache) {
+                $model = LaravelAiRouterModel::query()
+                    ->where('platform', $cache->platform)
+                    ->where('model_id', $cache->model_id)
+                    ->where('enabled', true)
+                    ->first();
+
+                if (! $model instanceof LaravelAiRouterModel || ! $this->adapters->has($model->platform)) {
+                    continue;
+                }
+
+                $fallbackExists = LaravelAiRouterFallback::query()
+                    ->where('laravel_ai_router_model_id', $model->getKey())
+                    ->where('enabled', true)
+                    ->exists();
+
+                if (! $fallbackExists) {
+                    continue;
+                }
+
+                $key = $this->usableSelectedCacheKey($cache, $model, $estimatedTokens, $requiresTools, $excludedKeyIds);
+
+                if (! $key instanceof LaravelAiRouterProviderKey) {
+                    continue;
+                }
+
+                return $this->toResult($model, $key);
+            }
+        }
+
+        throw new NoAvailableModelException('All selected Laravel AI Router provider models are exhausted. Select models for auto routing or wait for limits to reset.');
+    }
+
+    /**
+     * Return the selected cache row's provider key when every routing guard passes.
+     *
+     * @param  array<int, int>  $excludedKeyIds
+     */
+    private function usableSelectedCacheKey(LaravelAiRouterProviderModelCache $cache, LaravelAiRouterModel $model, int $estimatedTokens, bool $requiresTools, array $excludedKeyIds): ?LaravelAiRouterProviderKey
+    {
+        $key = $cache->providerKey;
+
+        if (! $key instanceof LaravelAiRouterProviderKey) {
+            return null;
+        }
+
+        if (in_array((int) $key->getKey(), $excludedKeyIds, true)) {
+            return null;
+        }
+
+        if (! $key->enabled || $key->status === 'invalid') {
+            return null;
+        }
+
+        if ($key->models_cache_expires_at !== null && $key->models_cache_expires_at->isPast()) {
+            return null;
+        }
+
+        if (! $cache->enabled || ! $cache->auto_enabled) {
+            return null;
+        }
+
+        if ($requiresTools && $cache->supports_tools === false) {
+            return null;
+        }
+
+        if ($this->rateLimits->isOnCooldown($model->platform, $model->model_id, (int) $key->getKey())) {
+            return null;
+        }
+
+        $limits = [
+            'rpm' => $model->rpm_limit,
+            'rpd' => $model->rpd_limit,
+            'tpm' => $model->tpm_limit,
+            'tpd' => $model->tpd_limit,
+        ];
+
+        if (! $this->rateLimits->canMakeRequest($model->platform, $model->model_id, (int) $key->getKey(), $limits)) {
+            return null;
+        }
+
+        if (! $this->rateLimits->canUseTokens($model->platform, $model->model_id, (int) $key->getKey(), $estimatedTokens, $limits)) {
+            return null;
+        }
+
+        return $key;
+    }
+
+    /**
+     * Resolve and sanitize the configured auto-routing strategy.
+     */
+    private function autoStrategy(): string
+    {
+        $strategy = config('laravel-ai-router.routing.auto_strategy', 'random_provider');
+
+        return in_array($strategy, ['priority', 'random', 'balanced_random', 'random_provider'], true)
+            ? $strategy
+            : 'random_provider';
+    }
+
+    /**
+     * Use a deterministic randomizer only when tests explicitly provide a seed.
+     */
+    private function randomizer(): Randomizer
+    {
+        $seed = config('laravel-ai-router.routing.random_seed');
+
+        if (is_int($seed) || (is_string($seed) && is_numeric($seed))) {
+            return new Randomizer(new Mt19937((int) $seed));
+        }
+
+        return new Randomizer;
     }
 
     /**

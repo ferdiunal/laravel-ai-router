@@ -7,11 +7,12 @@ namespace Ferdiunal\LaravelAiRouter\Console\Wizards;
 use Ferdiunal\LaravelAiRouter\Adapters\ProviderAdapterRegistry;
 use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
-use Ferdiunal\LaravelAiRouter\Services\ModelPreferenceManager;
 use Ferdiunal\LaravelAiRouter\Services\ProviderKeyManager;
 use Ferdiunal\LaravelAiRouter\Services\ProviderModelCacheService;
+use Ferdiunal\LaravelAiRouter\Services\ProviderModelSelectionManager;
 
 use function Laravel\Prompts\info;
+use function Laravel\Prompts\multiselect;
 use function Laravel\Prompts\outro;
 use function Laravel\Prompts\password;
 use function Laravel\Prompts\search;
@@ -19,21 +20,21 @@ use function Laravel\Prompts\text;
 use function Laravel\Prompts\warning;
 
 /**
- * Coordinates the interactive provider key setup flow, including provider selection, key input, label input, model refresh, and default model selection.
+ * Coordinates the interactive provider key setup flow, including provider selection, key input, label input, model refresh, and auto-routing model selection.
  */
 final class ProviderKeySetupWizard
 {
     /**
-     * Initialize the wizard with key, model-cache, and default-model preference services.
+     * Initialize the wizard with key, model-cache, and provider-scoped auto model selection services.
      */
     public function __construct(
         private readonly ProviderKeyManager $keys,
         private readonly ProviderModelCacheService $modelCache,
-        private readonly ModelPreferenceManager $preferences,
+        private readonly ProviderModelSelectionManager $modelSelection,
     ) {}
 
     /**
-     * Run the provider-key setup prompts, persist the key, refresh models, and store the selected default model.
+     * Run the provider-key setup prompts, persist the key, refresh models, and store the provider-scoped auto model selection.
      */
     public function run(bool $interactive): LaravelAiRouterProviderKey
     {
@@ -50,14 +51,14 @@ final class ProviderKeySetupWizard
 
         $choices = $this->modelCache->choicesForKey($key);
         if (count($choices) <= 1) {
-            warning('No cached available models found for this provider key yet. Defaulting to auto routing.');
+            warning('No cached available models found for this provider key yet. Auto routing model selection is empty.');
         }
 
-        $selectedModel = $this->modelPrompt($interactive, $choices);
-        $this->preferences->setDefaultTextModel($selectedModel);
-        info("Default text model set to {$selectedModel}.");
+        $selectedModelIds = $this->modelSelectionPrompt($interactive, $choices);
+        $this->modelSelection->setSelectedModelIdsForKey($key, $selectedModelIds);
+        info('Selected '.count($selectedModelIds).' model(s) for random auto routing.');
 
-        outro('Provider key saved and model preference updated.');
+        outro('Provider key saved and auto routing model selection updated.');
 
         return $key;
     }
@@ -129,25 +130,38 @@ final class ProviderKeySetupWizard
     }
 
     /**
-     * Render a searchable model prompt over cached model choices and return the selected model identifier.
+     * Render a multi-select prompt over cached model choices and return model IDs selected for auto routing.
      *
      * @param  array<string, string>  $options
+     * @param  array<int, string>|null  $defaultSelected
+     * @return array<int, string>
      */
-    private function modelPrompt(bool $interactive, array $options): string
+    private function modelSelectionPrompt(bool $interactive, array $options, ?array $defaultSelected = null): array
     {
-        $options = $options !== [] ? $options : ['auto' => 'Auto — route requests across healthy cached available models'];
+        unset($options['auto']);
 
-        if (! $interactive) {
-            return array_key_exists('auto', $options) ? 'auto' : (string) array_key_first($options);
+        if ($options === []) {
+            return [];
         }
 
-        return (string) search(
-            label: 'Which model should be the default?',
-            options: fn (string $value): array => collect($options)
-                ->filter(fn (string $description, string $modelId): bool => str_contains(strtolower($modelId.' '.$description), strtolower($value)))
-                ->all(),
-            placeholder: 'Search model id, label, provider, or capability',
+        $modelIds = array_values(array_map('strval', array_keys($options)));
+        $defaultSelected ??= $modelIds;
+        $defaultSelected = array_values(array_intersect($defaultSelected, $modelIds));
+
+        if (! $interactive) {
+            return $modelIds;
+        }
+
+        /** @var array<int, string> $selected */
+        $selected = multiselect(
+            label: 'Which models should participate in random auto routing for this provider key?',
+            options: $options,
+            default: $defaultSelected,
             scroll: 10,
+            required: false,
+            hint: 'Selected models are used by auto/random_provider. Unselected cached models remain available for exact model IDs.',
         );
+
+        return array_values(array_map('strval', $selected));
     }
 }

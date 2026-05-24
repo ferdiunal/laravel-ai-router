@@ -2,6 +2,13 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- Restricted provider-key scoped `auto` selection for Google AI Studio and Cloudflare Workers AI to chat-compatible safe rows so provider model discovery can keep embeddings, media, live/Interactions, preview, or unprobed rows visible for exact routing without allowing them to break `ai()->using('laravel-ai-router', 'auto')`.
+- Added a router-side compatibility guard so previously selected incompatible cache rows are ignored by `random_provider` auto routing instead of causing 400s such as Google Interactions-only or Cloudflare non-chat model errors.
+
 ## v0.4.6 - 2026-05-24
 
 ### Changed

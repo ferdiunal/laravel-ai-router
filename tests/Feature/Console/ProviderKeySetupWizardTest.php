@@ -51,7 +51,7 @@ it('asks for cloudflare account id as separate credential metadata', function ()
     }
 });
 
-it('selects all cached models for non-interactive auto routing setup without the auto pseudo model', function () {
+it('selects all cached models for non-interactive auto routing setup without the auto pseudo model when no safe default exists', function () {
     $wizard = app(ProviderKeySetupWizard::class);
     $modelSelectionPrompt = new ReflectionMethod($wizard, 'modelSelectionPrompt');
     $modelSelectionPrompt->setAccessible(true);
@@ -63,6 +63,20 @@ it('selects all cached models for non-interactive auto routing setup without the
     ]);
 
     expect($selected)->toBe(['model-a', 'model-b']);
+});
+
+it('preserves safe default selections during non-interactive auto routing setup', function () {
+    $wizard = app(ProviderKeySetupWizard::class);
+    $modelSelectionPrompt = new ReflectionMethod($wizard, 'modelSelectionPrompt');
+    $modelSelectionPrompt->setAccessible(true);
+
+    $selected = $modelSelectionPrompt->invoke($wizard, false, [
+        'auto' => 'Auto — route requests across healthy cached available models',
+        'safe-model' => 'Provider / Primary — Safe model',
+        'unsafe-model' => 'Provider / Primary — Unsafe model',
+    ], ['safe-model']);
+
+    expect($selected)->toBe(['safe-model']);
 });
 
 it('prompts for multiple auto routing models instead of one default model', function () {

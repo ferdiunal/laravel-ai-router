@@ -9,6 +9,33 @@ namespace Ferdiunal\LaravelAiRouter\Services;
  */
 final class ProviderModelAvailabilityPolicy
 {
+    /** @var array<int, string> */
+    private const CLOUDFLARE_CHAT_COMPLETIONS_MODELS = [
+        '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    ];
+
+    /** @var array<int, string> */
+    private const GOOGLE_GENERATE_CONTENT_AUTO_MODELS = [
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+    ];
+
+    /** @var array<int, string> */
+    private const GOOGLE_NON_CHAT_MODEL_MARKERS = [
+        'embedding',
+        'embed-',
+        '-embed',
+        'imagen',
+        'image',
+        'veo',
+        'tts',
+        'audio',
+        'live',
+        'dialog',
+        'bidi',
+        'aqa',
+    ];
+
     /**
      * Determine whether a live model row should be cached for the provider key.
      *
@@ -73,7 +100,64 @@ final class ProviderModelAvailabilityPolicy
      */
     public function shouldEnableAutoFallback(string $platform, array $providerDefinition, array $model): bool
     {
-        return $this->shouldCreateRoutableModelRow($platform, $providerDefinition);
+        if (! $this->shouldCreateRoutableModelRow($platform, $providerDefinition)) {
+            return false;
+        }
+
+        return $this->isChatCompatibleForAuto($platform, $model);
+    }
+
+    /**
+     * Determine whether a cached/discovered model row is safe for automatic chat routing.
+     *
+     * @param  array<string, mixed>  $model
+     */
+    public function isChatCompatibleForAuto(string $platform, array $model): bool
+    {
+        $modelId = $this->normalizedModelId($model);
+
+        return match ($platform) {
+            'cloudflare' => in_array($modelId, self::CLOUDFLARE_CHAT_COMPLETIONS_MODELS, true),
+            'google' => $this->isGoogleGenerateContentAutoModel($modelId, $model),
+            default => true,
+        };
+    }
+
+    /**
+     * Determine whether a Gemini model is safe for this package's native generateContent adapter.
+     *
+     * @param  array<string, mixed>  $model
+     */
+    private function isGoogleGenerateContentAutoModel(string $modelId, array $model): bool
+    {
+        foreach (self::GOOGLE_NON_CHAT_MODEL_MARKERS as $marker) {
+            if (str_contains($modelId, $marker)) {
+                return false;
+            }
+        }
+
+        $rawMetadata = is_array($model['raw_metadata'] ?? null) ? $model['raw_metadata'] : [];
+        $methods = array_values(array_map('strval', (array) data_get($rawMetadata, 'supportedGenerationMethods', [])));
+
+        if ($methods !== []
+            && ! in_array('generateContent', $methods, true)
+            && ! in_array('streamGenerateContent', $methods, true)) {
+            return false;
+        }
+
+        return in_array($modelId, self::GOOGLE_GENERATE_CONTENT_AUTO_MODELS, true);
+    }
+
+    /**
+     * Return a normalized provider model identifier from a cache/discovery row.
+     *
+     * @param  array<string, mixed>  $model
+     */
+    private function normalizedModelId(array $model): string
+    {
+        $modelId = strtolower(trim((string) ($model['model_id'] ?? data_get($model, 'raw_metadata.name', ''))));
+
+        return str_starts_with($modelId, 'models/') ? substr($modelId, 7) : $modelId;
     }
 
     /**

@@ -54,7 +54,11 @@ final class ProviderKeySetupWizard
             warning('No cached available models found for this provider key yet. Auto routing model selection is empty.');
         }
 
-        $selectedModelIds = $this->modelSelectionPrompt($interactive, $choices);
+        $selectedModelIds = $this->modelSelectionPrompt(
+            $interactive,
+            $choices,
+            $this->modelSelection->selectedModelIdsForKey($key),
+        );
         $this->modelSelection->setSelectedModelIdsForKey($key, $selectedModelIds);
         info('Selected '.count($selectedModelIds).' model(s) for random auto routing.');
 
@@ -149,7 +153,7 @@ final class ProviderKeySetupWizard
         $defaultSelected = array_values(array_intersect($defaultSelected, $modelIds));
 
         if (! $interactive) {
-            return $modelIds;
+            return $defaultSelected;
         }
 
         /** @var array<int, string> $selected */

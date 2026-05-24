@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Ferdiunal\LaravelAiRouter\Routing;
 
 use Ferdiunal\LaravelAiRouter\Adapters\ProviderAdapterRegistry;
+use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
 use Ferdiunal\LaravelAiRouter\Exceptions\ModelNotFoundException;
 use Ferdiunal\LaravelAiRouter\Exceptions\NoAvailableModelException;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterFallback;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterModel;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderModelCache;
+use Ferdiunal\LaravelAiRouter\Services\ProviderModelAvailabilityPolicy;
 use Illuminate\Support\Collection;
 use Random\Engine\Mt19937;
 use Random\Randomizer;
@@ -27,6 +29,7 @@ final class ModelRouter
         private readonly ProviderAdapterRegistry $adapters,
         private readonly RateLimitWindowRepository $rateLimits,
         private readonly RouteCandidateSelector $candidateSelector,
+        private readonly ProviderModelAvailabilityPolicy $modelAvailability,
     ) {}
 
     /**
@@ -193,6 +196,7 @@ final class ModelRouter
 
         $providerGroups = $cacheQuery
             ->get()
+            ->filter(fn (LaravelAiRouterProviderModelCache $cache): bool => $this->cacheRowIsAutoCompatible($cache))
             ->groupBy(fn (LaravelAiRouterProviderModelCache $cache): int => (int) $cache->provider_key_id)
             ->values();
 
@@ -233,6 +237,42 @@ final class ModelRouter
         }
 
         throw new NoAvailableModelException('All selected Laravel AI Router provider models are exhausted. Select models for auto routing or wait for limits to reset.');
+    }
+
+    /**
+     * Determine whether a selected cache row is still compatible with provider-specific auto chat routing.
+     */
+    private function cacheRowIsAutoCompatible(LaravelAiRouterProviderModelCache $cache): bool
+    {
+        try {
+            $definition = ProviderCatalog::get((string) $cache->platform);
+        } catch (\InvalidArgumentException) {
+            return false;
+        }
+
+        return $this->modelAvailability->shouldEnableAutoFallback(
+            (string) $cache->platform,
+            $definition,
+            $this->cacheRowPayload($cache),
+        );
+    }
+
+    /**
+     * Convert a cached provider-model row to the policy payload shape.
+     *
+     * @return array<string, mixed>
+     */
+    private function cacheRowPayload(LaravelAiRouterProviderModelCache $cache): array
+    {
+        return [
+            'model_id' => (string) $cache->model_id,
+            'display_name' => $cache->display_name,
+            'context_window' => $cache->context_window,
+            'budget_label' => $cache->budget_label,
+            'supports_tools' => $cache->supports_tools,
+            'is_free' => (bool) $cache->is_free,
+            'raw_metadata' => $cache->raw_metadata,
+        ];
     }
 
     /**

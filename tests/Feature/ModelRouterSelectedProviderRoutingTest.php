@@ -17,12 +17,12 @@ function migrateLaravelAiRouterForSelectedProviderRoutingTests(): void
     }
 }
 
-function createSelectedProviderRoutingKey(string $label): LaravelAiRouterProviderKey
+function createSelectedProviderRoutingKey(string $label, string $platform = 'openrouter'): LaravelAiRouterProviderKey
 {
     return LaravelAiRouterProviderKey::query()->create([
-        'platform' => 'openrouter',
+        'platform' => $platform,
         'label' => $label,
-        'key' => 'key-openrouter-'.strtolower($label).'-value-123456',
+        'key' => 'key-'.$platform.'-'.strtolower($label).'-value-123456',
         'status' => 'healthy',
         'enabled' => true,
         'models_cached_at' => now(),
@@ -30,10 +30,10 @@ function createSelectedProviderRoutingKey(string $label): LaravelAiRouterProvide
     ]);
 }
 
-function createSelectedProviderRoutingModel(string $modelId, int $priority, bool $fallbackEnabled = true): LaravelAiRouterModel
+function createSelectedProviderRoutingModel(string $modelId, int $priority, bool $fallbackEnabled = true, string $platform = 'openrouter'): LaravelAiRouterModel
 {
     $model = LaravelAiRouterModel::query()->create([
-        'platform' => 'openrouter',
+        'platform' => $platform,
         'model_id' => $modelId,
         'display_name' => $modelId,
         'intelligence_rank' => $priority,
@@ -51,7 +51,10 @@ function createSelectedProviderRoutingModel(string $modelId, int $priority, bool
     return $model;
 }
 
-function createSelectedProviderRoutingCache(LaravelAiRouterProviderKey $key, LaravelAiRouterModel $model, bool $autoEnabled, ?bool $supportsTools = null): LaravelAiRouterProviderModelCache
+/**
+ * @param  array<string, mixed>|null  $rawMetadata
+ */
+function createSelectedProviderRoutingCache(LaravelAiRouterProviderKey $key, LaravelAiRouterModel $model, bool $autoEnabled, ?bool $supportsTools = null, ?array $rawMetadata = null): LaravelAiRouterProviderModelCache
 {
     return LaravelAiRouterProviderModelCache::query()->create([
         'provider_key_id' => $key->getKey(),
@@ -64,6 +67,7 @@ function createSelectedProviderRoutingCache(LaravelAiRouterProviderKey $key, Lar
         'enabled' => true,
         'auto_enabled' => $autoEnabled,
         'source' => 'live',
+        'raw_metadata' => $rawMetadata,
         'checked_at' => now(),
     ]);
 }
@@ -152,3 +156,23 @@ it('selected auto routing still skips cache rows without required tool support',
 
     expect($route->modelId)->toBe('selected-with-tools');
 });
+
+it('selected auto routing ignores provider-specific non-chat model rows even if they were previously selected', function (): void {
+    migrateLaravelAiRouterForSelectedProviderRoutingTests();
+
+    $key = createSelectedProviderRoutingKey('Google Live', platform: 'google');
+    $liveOnly = createSelectedProviderRoutingModel('gemini-2.0-flash-live-001', priority: 1, platform: 'google');
+    createSelectedProviderRoutingCache(
+        $key,
+        $liveOnly,
+        autoEnabled: true,
+        rawMetadata: [
+            'name' => 'models/gemini-2.0-flash-live-001',
+            'supportedGenerationMethods' => ['generateContent', 'bidiGenerateContent'],
+        ],
+    );
+
+    config()->set('laravel-ai-router.routing.auto_strategy', 'random_provider');
+
+    app(ModelRouter::class)->route('auto');
+})->throws(NoAvailableModelException::class, 'All selected Laravel AI Router provider models are exhausted');

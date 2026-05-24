@@ -223,6 +223,76 @@ it('refreshes cloudflare models with stored account metadata and token-only bear
         && $request->hasHeader('Authorization', 'Bearer cf-token-secret-123456'));
 });
 
+it('auto-selects only Google models compatible with the native generateContent adapter', function () {
+    migrateLaravelAiRouterForCacheTests();
+
+    Http::fake([
+        'https://generativelanguage.googleapis.com/v1beta/models?key=test-google-key' => Http::response([
+            'models' => [[
+                'name' => 'models/gemini-2.5-flash',
+                'displayName' => 'Gemini 2.5 Flash',
+                'inputTokenLimit' => 1048576,
+                'supportedGenerationMethods' => ['generateContent', 'streamGenerateContent'],
+            ], [
+                'name' => 'models/gemini-2.0-flash-live-001',
+                'displayName' => 'Gemini Live',
+                'inputTokenLimit' => 1048576,
+                'supportedGenerationMethods' => ['generateContent', 'bidiGenerateContent'],
+            ]],
+        ]),
+    ]);
+
+    $key = app(ProviderKeyManager::class)->add('google', 'test-google-key', 'Google Live', refreshModels: true);
+
+    $models = LaravelAiRouterProviderModelCache::query()
+        ->where('provider_key_id', $key->getKey())
+        ->orderBy('model_id')
+        ->get();
+
+    expect($models->pluck('model_id')->all())->toBe([
+        'gemini-2.0-flash-live-001',
+        'gemini-2.5-flash',
+    ]);
+    expect($models->where('auto_enabled', true)->pluck('model_id')->values()->all())->toBe(['gemini-2.5-flash']);
+});
+
+it('auto-selects only Cloudflare Workers AI chat-completions compatible models', function () {
+    migrateLaravelAiRouterForCacheTests();
+
+    Http::fake([
+        'https://api.cloudflare.com/client/v4/accounts/account-123/ai/models/search' => Http::response([
+            'result' => [[
+                'name' => '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+                'display_name' => 'Llama 3.3 70B fp8-fast',
+                'properties' => ['context_window' => 131072],
+            ], [
+                'name' => '@cf/baai/bge-base-en-v1.5',
+                'display_name' => 'BGE Base Embeddings',
+                'task' => ['name' => 'Text Embeddings'],
+            ]],
+        ]),
+    ]);
+
+    $key = app(ProviderKeyManager::class)->add(
+        'cloudflare',
+        'cf-token-secret-123456',
+        'Workers Mixed',
+        refreshModels: true,
+        credentialMetadata: ['account_id' => 'account-123'],
+    );
+
+    $models = LaravelAiRouterProviderModelCache::query()
+        ->where('provider_key_id', $key->getKey())
+        ->orderBy('model_id')
+        ->get();
+
+    expect($models->pluck('model_id')->all())->toBe([
+        '@cf/baai/bge-base-en-v1.5',
+        '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    ]);
+    expect($models->where('auto_enabled', true)->pluck('model_id')->values()->all())->toBe(['@cf/meta/llama-3.3-70b-instruct-fp8-fast']);
+});
+
 it('excludes expired provider label model cache rows from model listings', function () {
     migrateLaravelAiRouterForCacheTests();
 

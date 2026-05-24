@@ -2,6 +2,20 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.4.1 - 2026-05-24
+
+### Fixed
+
+- Fixed provider setup prompts so native routable adapters such as Google AI Studio and Cloudflare Workers AI are offered alongside OpenAI-compatible providers.
+- Replaced the prompt-only hardcoded adapter allowlist with `ProviderAdapterRegistry::has(...)` so future implemented native adapters appear automatically.
+- Added regression coverage proving `laravel-ai-router:provider:add` can select the newly built-in Google provider path.
+
+### Validation
+
+- `composer validate --strict` — valid.
+- `composer ci` — 150 passed, 1 skipped, 487 assertions.
+- `git diff --check` — clean.
+
 ## v0.4.0 - 2026-05-24
 
 ### Summary

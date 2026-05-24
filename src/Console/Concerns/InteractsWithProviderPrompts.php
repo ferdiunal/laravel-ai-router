@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ferdiunal\LaravelAiRouter\Console\Concerns;
 
+use Ferdiunal\LaravelAiRouter\Adapters\ProviderAdapterRegistry;
 use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderDefinition;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
@@ -47,8 +48,10 @@ trait InteractsWithProviderPrompts
      */
     protected function providerPrompt(string $label = 'Provider'): string
     {
+        $adapters = app(ProviderAdapterRegistry::class);
+
         $options = collect(ProviderCatalog::all())
-            ->filter(fn (array $definition): bool => in_array($definition['adapter'] ?? null, ['openai-compatible', 'cohere'], true))
+            ->filter(fn (array $definition, string $platform): bool => $adapters->has($platform))
             ->mapWithKeys(fn (array $definition, string $platform): array => [$platform => "{$definition['name']} ({$platform})"])
             ->all();
 

@@ -2,6 +2,10 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.4.2 - 2026-05-24
+
+**Full Changelog**: https://github.com/ferdiunal/laravel-ai-router/compare/v0.4.1...v0.4.2
+
 ## v0.4.1 - 2026-05-24
 
 ### Fixed

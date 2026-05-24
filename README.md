@@ -118,10 +118,11 @@ return [
     ],
 
     'routing' => [
-        // priority keeps the fallback order deterministic. balanced_random shuffles only
-        // the top fallback rows by effective priority; normal key, cache, and limit checks
-        // still decide whether a shuffled candidate is usable.
-        'auto_strategy' => env('LARAVEL_AI_ROUTER_AUTO_STRATEGY', 'priority'),
+        // random is the default and shuffles the full fallback-enabled candidate list.
+        // priority keeps fallback order deterministic; balanced_random shuffles only
+        // the configured top pool. Normal key, cache, and limit checks still decide
+        // whether each shuffled candidate is usable.
+        'auto_strategy' => env('LARAVEL_AI_ROUTER_AUTO_STRATEGY', 'random'),
         'random_pool_size' => env('LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE', 5),
         'random_priority_window' => env('LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW', 3),
     ],
@@ -241,7 +242,7 @@ The command can refresh the selected key's cache, list cached available models, 
 - The cache row matches the provider key ID, platform, and label.
 - The cache row is enabled.
 
-Live model discovery is provider-agnostic for routable OpenAI-compatible providers: valid `/models` rows are cached even when their IDs do not end in `:free`. Free-tier status is stored as metadata (`is_free`); NVIDIA NIM live rows are marked as free credit-backed models (`free` + `credits-based`), while other non-free live rows default to the `credits-based` budget label. Exact live model IDs are routeable directly, and newly discovered built-in live rows keep their auto-fallback row disabled by default so `auto` does not unexpectedly spend credits.
+Live model discovery is provider-agnostic for routable providers: valid `/models` rows are cached even when their IDs do not end in `:free`. Free-tier status is stored as metadata (`is_free`); NVIDIA NIM live rows are marked as free credit-backed models (`free` + `credits-based`), while other non-free live rows default to the `credits-based` budget label. Exact live model IDs are routeable directly. New routable live rows also get fallback rows enabled so the default `auto` strategy can rotate across cached provider/model choices; review each upstream provider's quota and billing terms before using key-backed providers in production.
 
 The package config default remains `auto`. When the user selects a default model through the CLI, the selection is persisted in the package settings table and read at runtime by `LaravelAiRouterProvider::defaultTextModel()`. This does not mutate config files.
 
@@ -289,7 +290,7 @@ ai()
     ->asText();
 ```
 
-`auto` lets Laravel AI Router choose an eligible provider key and fallback-enabled cached model. By default the auto chain remains priority-based (`routing.auto_strategy=priority`). Set `LARAVEL_AI_ROUTER_AUTO_STRATEGY=balanced_random` to shuffle only the configured top fallback pool (`LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE`, bounded by `LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW`) while still enforcing disabled/invalid-key skips, model-cache compatibility, cooldowns, and rate/token-limit checks. Exact model calls still route only that requested model ID by default.
+`auto` lets Laravel AI Router choose an eligible provider key and fallback-enabled cached model. By default the auto chain uses `routing.auto_strategy=random`, which shuffles the full enabled fallback list on each route attempt while still enforcing disabled/invalid-key skips, model-cache compatibility, cooldowns, and rate/token-limit checks. Set `LARAVEL_AI_ROUTER_AUTO_STRATEGY=priority` for deterministic fallback order, or `balanced_random` to shuffle only the configured top fallback pool (`LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE`, bounded by `LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW`). Exact model calls still route only that requested model ID by default.
 
 You can also route an exact cached model ID:
 
@@ -572,7 +573,7 @@ $response->meta;
 | Structured output | Supported | Sends JSON-mode style options and maps valid JSON content into Laravel AI structured response types. |
 | Function tools | Supported for non-streaming | Executes OpenAI-compatible `tools` / `tool_calls` loops and sends tool result messages back to the provider. |
 | Streaming tools | Not supported | Fails before opening the upstream stream with a clear `LogicException`. |
-| Failover | Supported | Retries eligible internal provider keys up to `routing.max_attempts`, then maps rate limits, insufficient credit/quota, timeout, and overload errors to Laravel AI failover exception types. `auto` defaults to priority ordering and can opt into `balanced_random` top-pool shuffling without broadening the eligible model set. |
+| Failover | Supported | Retries eligible internal provider keys up to `routing.max_attempts`, then maps rate limits, insufficient credit/quota, timeout, and overload errors to Laravel AI failover exception types. `auto` defaults to full random fallback-candidate rotation; `priority` and bounded `balanced_random` remain available without bypassing key/cache/limit eligibility checks. |
 | Images, audio, transcription, embeddings, reranking, files, stores | Not supported | The package advertises only the text provider contract and throws explicit capability errors for unsupported methods. |
 
 ## Usage Analytics

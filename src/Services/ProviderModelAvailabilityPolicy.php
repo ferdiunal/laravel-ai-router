@@ -73,11 +73,7 @@ final class ProviderModelAvailabilityPolicy
      */
     public function shouldEnableAutoFallback(string $platform, array $providerDefinition, array $model): bool
     {
-        if (! (bool) ($model['is_free'] ?? false)) {
-            return false;
-        }
-
-        return (bool) ($providerDefinition['custom'] ?? false);
+        return $this->shouldCreateRoutableModelRow($platform, $providerDefinition);
     }
 
     /**

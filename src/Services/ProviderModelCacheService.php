@@ -347,8 +347,7 @@ final class ProviderModelCacheService
             $hasEnabledCuratedFallback = (bool) ($model['_has_curated_metadata'] ?? false)
                 && $fallback->exists
                 && (bool) $fallback->enabled;
-            $enabledForAuto = (bool) ($model['is_free'] ?? false)
-                && ($autoEligible || $hasEnabledCuratedFallback);
+            $enabledForAuto = $autoEligible || $hasEnabledCuratedFallback;
 
             $fallback->forceFill([
                 'enabled' => $enabledForAuto,

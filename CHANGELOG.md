@@ -2,6 +2,22 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.4.5 - 2026-05-24
+
+### Changed
+
+- Changed default `auto` routing to full fallback-candidate random rotation while preserving the existing priority and bounded `balanced_random` strategies as explicit options.
+- Enabled refreshed live cached provider models for `auto` fallback participation when the provider has a routable adapter, instead of limiting auto participation to free/custom metadata.
+- Added a package-storage backfill migration to enable or create fallback rows for existing enabled cached provider models with non-invalid provider keys.
+
+### Validation
+
+- `composer validate --strict --no-ansi` — valid; Composer emitted PHP 8.4 deprecation notices from the global Composer phar.
+- `composer ci --no-ansi` — 166 passed, 1 skipped, 526 assertions; Composer emitted PHP 8.4 deprecation notices from the global Composer phar.
+- `git diff --check` — clean.
+
+**Full Changelog**: https://github.com/ferdiunal/laravel-ai-router/compare/v0.4.4...v0.4.5
+
 ## v0.4.4 - 2026-05-24
 
 ### Fixed

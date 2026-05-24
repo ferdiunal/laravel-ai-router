@@ -25,6 +25,7 @@ function migrateLaravelAiRouterForRouterTests(): void
 it('auto routes to the first enabled fallback with an enabled non-invalid key', function () {
     migrateLaravelAiRouterForRouterTests();
     app(SeedModelCatalog::class)->seed();
+    config()->set('laravel-ai-router.routing.auto_strategy', 'priority');
 
     $model = LaravelAiRouterModel::query()->where('platform', 'openrouter')->firstOrFail();
     LaravelAiRouterProviderKey::query()->create([
@@ -208,7 +209,7 @@ it('routes tool prompts through cached models with unknown tool support', functi
     expect($route->apiKey)->toBe('key-unknown-tools-value-123456');
 });
 
-it('routes exact nvidia live cached models without enabling them for auto fallback by default', function () {
+it('enables nvidia live cached models for random auto fallback while keeping exact routing', function () {
     migrateLaravelAiRouterForRouterTests();
 
     Http::fake([
@@ -236,8 +237,8 @@ it('routes exact nvidia live cached models without enabling them for auto fallba
 
     expect($fallback)->not->toBeNull();
     assert($fallback instanceof LaravelAiRouterFallback);
-    expect($fallback->enabled)->toBeFalse();
-    expect(app(ProviderModelCacheService::class)->firstAvailableModelId())->toBeNull();
+    expect($fallback->enabled)->toBeTrue();
+    expect(app(ProviderModelCacheService::class)->firstAvailableModelId())->toBe('nvidia/nemotron-nano-9b-v2');
 
     $route = app(ModelRouter::class)->route('nvidia/nemotron-nano-9b-v2');
 
@@ -246,7 +247,7 @@ it('routes exact nvidia live cached models without enabling them for auto fallba
         ->and($route->keyId)->toBe($key->getKey());
 });
 
-it('keeps seeded nvidia live free models out of auto fallback when refreshed', function () {
+it('keeps seeded nvidia live free models in auto fallback when refreshed', function () {
     migrateLaravelAiRouterForRouterTests();
     app(SeedModelCatalog::class)->seed();
 
@@ -270,11 +271,11 @@ it('keeps seeded nvidia live free models out of auto fallback when refreshed', f
         ->firstOrFail();
 
     expect($model->enabled)->toBeTrue();
-    expect($fallback->enabled)->toBeFalse();
+    expect($fallback->enabled)->toBeTrue();
     expect(app(ProviderModelCacheService::class)->cachedModelsForKey($key)[0]->is_free)->toBeTrue();
 });
 
-it('routes exact non-free live cached models for other providers without adding them to auto fallback', function () {
+it('routes non-free live cached models through auto fallback for key-backed free-tier providers', function () {
     migrateLaravelAiRouterForRouterTests();
 
     Http::fake([
@@ -301,7 +302,13 @@ it('routes exact non-free live cached models for other providers without adding 
 
     expect($fallback)->not->toBeNull();
     assert($fallback instanceof LaravelAiRouterFallback);
-    expect($fallback->enabled)->toBeFalse();
+    expect($fallback->enabled)->toBeTrue();
+
+    $autoRoute = app(ModelRouter::class)->route('auto');
+
+    expect($autoRoute->platform)->toBe('openrouter')
+        ->and($autoRoute->modelId)->toBe('provider/paid-model')
+        ->and($autoRoute->keyId)->toBe($key->getKey());
 
     $route = app(ModelRouter::class)->route('provider/paid-model');
 

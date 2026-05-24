@@ -81,6 +81,31 @@ it('keeps priority auto strategy ordered by effective priority', function () {
         ->and($route->modelId)->toBe('qwen3-235b');
 });
 
+it('defaults auto routing to full random provider and model rotation', function () {
+    expect(config('laravel-ai-router.routing.auto_strategy'))->toBe('random');
+});
+
+it('random auto strategy shuffles the entire enabled fallback list', function () {
+    migrateLaravelAiRouterForBalancedRoutingTests();
+
+    seedBalancedRoutingFallbackOrder(['cerebras', 'openrouter', 'kilo', 'github']);
+
+    createBalancedRoutingProviderKey('cerebras', 'Primary');
+    createBalancedRoutingProviderKey('openrouter', 'Secondary');
+    createBalancedRoutingProviderKey('kilo', 'Tertiary');
+    createBalancedRoutingProviderKey('github', 'Outside Pool');
+
+    config()->set('laravel-ai-router.routing.auto_strategy', 'random');
+    config()->set('laravel-ai-router.routing.random_pool_size', 1);
+    config()->set('laravel-ai-router.routing.random_priority_window', 0);
+    config()->set('laravel-ai-router.routing.random_seed', 1234);
+
+    $route = app(ModelRouter::class)->route('auto');
+
+    expect($route->platform)->toBe('openrouter')
+        ->and($route->platform)->not->toBe('cerebras');
+});
+
 it('balanced random auto strategy shuffles only the top safe fallback pool', function () {
     migrateLaravelAiRouterForBalancedRoutingTests();
 

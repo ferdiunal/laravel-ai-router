@@ -118,10 +118,11 @@ return [
     ],
 
     'routing' => [
-        // priority deterministic fallback sırasını korur. balanced_random ise yalnızca
-        // effective priority değerine göre üst fallback satırlarını karıştırır; normal key,
-        // cache ve limit kontrolleri adayın kullanılabilirliğini yine belirler.
-        'auto_strategy' => env('LARAVEL_AI_ROUTER_AUTO_STRATEGY', 'priority'),
+        // random varsayılandır ve fallback-enabled aday listesinin tamamını karıştırır.
+        // priority deterministic fallback sırasını korur; balanced_random sadece configured
+        // üst havuzu karıştırır. Normal key, cache ve limit kontrolleri adayın
+        // kullanılabilirliğini yine belirler.
+        'auto_strategy' => env('LARAVEL_AI_ROUTER_AUTO_STRATEGY', 'random'),
         'random_pool_size' => env('LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE', 5),
         'random_priority_window' => env('LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW', 3),
     ],
@@ -241,7 +242,7 @@ Bu komut seçilen key için cache refresh yapabilir, cached available modelleri 
 - Cache row provider key ID, platform ve label ile eşleşir.
 - Cache row enabled durumdadır.
 
-Live model discovery routable OpenAI-compatible provider'lar için geneldir: `/models` içinden gelen geçerli satırlar ID değeri `:free` ile bitmese bile cachelenir. Free-tier bilgisi metadata olarak saklanır (`is_free`); NVIDIA NIM live satırları free credit-backed model olarak işaretlenir (`free` + `credits-based`), diğer non-free live satırlar varsayılan olarak `credits-based` budget label alır. Exact live model ID'ler doğrudan route edilebilir ve yeni keşfedilen built-in live satırların auto-fallback satırı varsayılan olarak disabled kalır, böylece `auto` beklenmedik kredi tüketmez.
+Live model discovery routable provider'lar için geneldir: `/models` içinden gelen geçerli satırlar ID değeri `:free` ile bitmese bile cachelenir. Free-tier bilgisi metadata olarak saklanır (`is_free`); NVIDIA NIM live satırları free credit-backed model olarak işaretlenir (`free` + `credits-based`), diğer non-free live satırlar varsayılan olarak `credits-based` budget label alır. Exact live model ID'ler doğrudan route edilebilir. Yeni routable live satırlar için fallback row da enabled olur; böylece varsayılan `auto` stratejisi cached provider/model seçenekleri arasında dönebilir. Key-backed provider'ları production'da kullanmadan önce upstream quota ve billing şartlarını ayrıca gözden geçir.
 
 Package config default değeri `auto` olarak kalır. Kullanıcı CLI üzerinden default model seçtiğinde seçim package settings tablosuna yazılır ve runtime sırasında `LaravelAiRouterProvider::defaultTextModel()` tarafından okunur. Bu işlem config dosyalarını değiştirmez.
 
@@ -289,7 +290,7 @@ ai()
     ->asText();
 ```
 
-`auto`, Laravel AI Router'ın uygun provider key ve fallback-enabled cached model seçmesini sağlar. Varsayılan auto zinciri priority tabanlı kalır (`routing.auto_strategy=priority`). `LARAVEL_AI_ROUTER_AUTO_STRATEGY=balanced_random` ayarı, sadece configured üst fallback havuzunu (`LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE`, `LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW` sınırıyla) karıştırır; disabled/invalid key skip, model-cache uyumluluğu, cooldown ve rate/token-limit kontrolleri yine uygulanır. Exact model çağrıları varsayılan olarak yalnızca istenen model ID içinde route edilir.
+`auto`, Laravel AI Router'ın uygun provider key ve fallback-enabled cached model seçmesini sağlar. Varsayılan auto zinciri `routing.auto_strategy=random` kullanır; her route denemesinde enabled fallback listesinin tamamını karıştırır ama disabled/invalid key skip, model-cache uyumluluğu, cooldown ve rate/token-limit kontrollerini yine uygular. Deterministic sıra istiyorsan `LARAVEL_AI_ROUTER_AUTO_STRATEGY=priority`, sadece configured üst fallback havuzunu karıştırmak istiyorsan `balanced_random` (`LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE`, `LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW`) kullan. Exact model çağrıları varsayılan olarak yalnızca istenen model ID içinde route edilir.
 
 Cached exact model ID ile de route edebilirsin:
 
@@ -572,7 +573,7 @@ $response->meta;
 | Structured output | Desteklenir | JSON-mode benzeri seçenekleri gönderir ve geçerli JSON içeriğini Laravel AI structured response tiplerine map eder. |
 | Function tools | Non-stream desteklenir | OpenAI-compatible `tools` / `tool_calls` loop'unu çalıştırır ve tool result mesajlarını provider'a geri gönderir. |
 | Streaming tools | Desteklenmez | Upstream stream açılmadan açık bir `LogicException` ile fail eder. |
-| Failover | Desteklenir | Uygun internal provider key kayıtlarını `routing.max_attempts` sınırına kadar dener; ardından rate limit, insufficient credit/quota, timeout ve overload hatalarını Laravel AI failover exception tiplerine map eder. `auto` varsayılan olarak priority sırasını kullanır; `balanced_random` opt-in üst havuz karıştırması eligible model setini genişletmez. |
+| Failover | Desteklenir | Uygun internal provider key kayıtlarını `routing.max_attempts` sınırına kadar dener; ardından rate limit, insufficient credit/quota, timeout ve overload hatalarını Laravel AI failover exception tiplerine map eder. `auto` varsayılan olarak full random fallback-candidate rotation kullanır; `priority` ve bounded `balanced_random` key/cache/limit eligibility kontrollerini bypass etmeden kullanılabilir. |
 | Images, audio, transcription, embeddings, reranking, files, stores | Desteklenmez | Paket yalnızca text provider contract advertise eder ve unsupported methodlar için açık capability hatası fırlatır. |
 
 ## Usage Analytics

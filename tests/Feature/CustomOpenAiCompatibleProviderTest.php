@@ -149,7 +149,7 @@ it('adds runtime custom OpenAI-compatible providers and caches their routable av
 
     expect(LaravelAiRouterFallback::query()
         ->where('laravel_ai_router_model_id', $paidModel->getKey())
-        ->value('enabled'))->toBeFalse();
+        ->value('enabled'))->toBeTrue();
 });
 
 it('rejects unsafe or colliding custom provider definitions', function (string $platform, string $baseUrl, string $field) {

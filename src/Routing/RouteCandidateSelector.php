@@ -32,8 +32,14 @@ final class RouteCandidateSelector
             ])
             ->values();
 
-        if ($this->strategy() !== 'balanced_random' || $ordered->count() <= 1) {
+        $strategy = $this->strategy();
+
+        if ($strategy === 'priority' || $ordered->count() <= 1) {
             return $ordered;
+        }
+
+        if ($strategy === 'random') {
+            return collect($this->randomizer()->shuffleArray($ordered->all()))->values();
         }
 
         $bestPriority = $this->effectivePriority($ordered->first());
@@ -74,9 +80,9 @@ final class RouteCandidateSelector
      */
     private function strategy(): string
     {
-        $strategy = config('laravel-ai-router.routing.auto_strategy', 'priority');
+        $strategy = config('laravel-ai-router.routing.auto_strategy', 'random');
 
-        return $strategy === 'balanced_random' ? 'balanced_random' : 'priority';
+        return in_array($strategy, ['priority', 'random', 'balanced_random'], true) ? $strategy : 'random';
     }
 
     /**

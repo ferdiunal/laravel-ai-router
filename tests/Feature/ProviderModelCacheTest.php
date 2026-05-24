@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Ferdiunal\LaravelAiRouter\LaravelAiRouterProvider;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterFallback;
+use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterModel;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderModelCache;
 use Ferdiunal\LaravelAiRouter\Services\ProviderKeyManager;
@@ -169,6 +171,16 @@ it('caches google live Gemini models through the native adapter', function () {
     expect($models->first()->context_window)->toBe(1048576);
     expect($models->first()->supports_tools)->toBeNull();
     expect(app(ProviderModelCacheService::class)->modelIds('google', 'Google', includeAuto: false))->toBe(['gemini-2.5-flash']);
+
+    $runtimeModel = LaravelAiRouterModel::query()
+        ->where('platform', 'google')
+        ->where('model_id', 'gemini-2.5-flash')
+        ->firstOrFail();
+    $fallback = LaravelAiRouterFallback::query()
+        ->where('laravel_ai_router_model_id', $runtimeModel->getKey())
+        ->firstOrFail();
+
+    expect($fallback->enabled)->toBeTrue();
 });
 
 it('refreshes cloudflare models with stored account metadata and token-only bearer auth', function () {
@@ -196,6 +208,16 @@ it('refreshes cloudflare models with stored account metadata and token-only bear
         ->and($key->credential_metadata)->toBe(['account_id' => 'account-123'])
         ->and(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->pluck('model_id')->all())
         ->toBe(['@cf/meta/llama-3.3-70b-instruct-fp8-fast']);
+
+    $runtimeModel = LaravelAiRouterModel::query()
+        ->where('platform', 'cloudflare')
+        ->where('model_id', '@cf/meta/llama-3.3-70b-instruct-fp8-fast')
+        ->firstOrFail();
+    $fallback = LaravelAiRouterFallback::query()
+        ->where('laravel_ai_router_model_id', $runtimeModel->getKey())
+        ->firstOrFail();
+
+    expect($fallback->enabled)->toBeTrue();
 
     Http::assertSent(fn ($request): bool => $request->url() === 'https://api.cloudflare.com/client/v4/accounts/account-123/ai/models/search'
         && $request->hasHeader('Authorization', 'Bearer cf-token-secret-123456'));

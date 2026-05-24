@@ -2,6 +2,20 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.4.4 - 2026-05-24
+
+### Fixed
+
+- Stabilized the Cloudflare account-ID prompt regression test across Windows and non-Windows CI runners by asserting the Laravel Prompts fallback prompt metadata directly.
+
+### Validation
+
+- `composer validate --strict` — valid.
+- `composer ci` — 158 passed, 1 skipped, 507 assertions.
+- `git diff --check` — clean.
+
+**Full Changelog**: https://github.com/ferdiunal/laravel-ai-router/compare/v0.4.3...v0.4.4
+
 ## v0.4.3 - 2026-05-24
 
 ### Fixed

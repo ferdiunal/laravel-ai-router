@@ -29,7 +29,7 @@ it('discovers nvidia models from the live models endpoint when explicitly enable
     $firstModelId = $models[0]->model_id;
 
     expect(collect($models)->pluck('platform')->unique()->values()->all())->toBe(['nvidia']);
-    expect(collect($models)->every(fn ($model): bool => $model->is_free === false))->toBeTrue();
+    expect(collect($models)->every(fn ($model): bool => $model->is_free === true))->toBeTrue();
     expect(collect($models)->pluck('budget_label')->unique()->values()->all())->toBe(['credits-based']);
 
     $route = app(ModelRouter::class)->route($firstModelId);

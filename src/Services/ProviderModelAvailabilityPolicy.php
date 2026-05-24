@@ -26,6 +26,10 @@ final class ProviderModelAvailabilityPolicy
      */
     public function isFree(string $platform, array $model, bool $hasCuratedMetadata): bool
     {
+        if ($platform === 'nvidia') {
+            return true;
+        }
+
         return $hasCuratedMetadata || $this->looksFree($platform, (string) $model['model_id']);
     }
 
@@ -38,6 +42,10 @@ final class ProviderModelAvailabilityPolicy
     {
         if (isset($model['budget_label'])) {
             return (string) $model['budget_label'];
+        }
+
+        if ($platform === 'nvidia') {
+            return 'credits-based';
         }
 
         if (! $isFree) {

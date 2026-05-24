@@ -273,6 +273,7 @@ final class ProviderModelCacheService
                 $merged = [
                     ...$metadata,
                     ...Arr::whereNotNull($model),
+                    '_has_curated_metadata' => $metadata !== [],
                     'model_id' => $modelId,
                     'display_name' => (string) ($metadata['display_name'] ?? $model['display_name'] ?? $modelId),
                 ];
@@ -343,8 +344,11 @@ final class ProviderModelCacheService
             }
 
             $autoEligible = $this->availability->shouldEnableAutoFallback($platform, $definition, $model);
+            $hasEnabledCuratedFallback = (bool) ($model['_has_curated_metadata'] ?? false)
+                && $fallback->exists
+                && (bool) $fallback->enabled;
             $enabledForAuto = (bool) ($model['is_free'] ?? false)
-                && ($autoEligible || ($fallback->exists && (bool) $fallback->enabled));
+                && ($autoEligible || $hasEnabledCuratedFallback);
 
             $fallback->forceFill([
                 'enabled' => $enabledForAuto,

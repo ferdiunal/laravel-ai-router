@@ -218,6 +218,34 @@ it('routes exact nvidia live cached models without enabling them for auto fallba
         ->and($route->keyId)->toBe($key->getKey());
 });
 
+it('keeps seeded nvidia live free models out of auto fallback when refreshed', function () {
+    migrateLaravelAiRouterForRouterTests();
+    app(SeedModelCatalog::class)->seed();
+
+    Http::fake([
+        'https://integrate.api.nvidia.com/v1/models' => Http::response([
+            'data' => [
+                ['id' => 'meta/llama-3.1-70b-instruct', 'name' => 'Llama 3.1 70B Instruct'],
+            ],
+        ]),
+    ]);
+
+    $key = app(ProviderKeyManager::class)->add('nvidia', 'key-nvidia-value-123456', 'NVIDIA', refreshModels: true);
+
+    $model = LaravelAiRouterModel::query()
+        ->where('platform', 'nvidia')
+        ->where('model_id', 'meta/llama-3.1-70b-instruct')
+        ->firstOrFail();
+
+    $fallback = LaravelAiRouterFallback::query()
+        ->where('laravel_ai_router_model_id', $model->getKey())
+        ->firstOrFail();
+
+    expect($model->enabled)->toBeTrue();
+    expect($fallback->enabled)->toBeFalse();
+    expect(app(ProviderModelCacheService::class)->cachedModelsForKey($key)[0]->is_free)->toBeTrue();
+});
+
 it('routes exact non-free live cached models for other providers without adding them to auto fallback', function () {
     migrateLaravelAiRouterForRouterTests();
 

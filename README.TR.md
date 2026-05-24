@@ -226,7 +226,7 @@ Bu komut seçilen key için cache refresh yapabilir, cached available modelleri 
 - Cache row provider key ID, platform ve label ile eşleşir.
 - Cache row enabled durumdadır.
 
-Live model discovery routable OpenAI-compatible provider'lar için geneldir: `/models` içinden gelen geçerli satırlar ID değeri `:free` ile bitmese bile cachelenir. Free-tier bilgisi metadata olarak saklanır (`is_free`); non-free live satırlar varsayılan olarak `credits-based` budget label alır, exact model ID ile route edilebilir ve `auto` beklenmedik kredi tüketmesin diye auto-fallback satırı varsayılan olarak disabled kalır.
+Live model discovery routable OpenAI-compatible provider'lar için geneldir: `/models` içinden gelen geçerli satırlar ID değeri `:free` ile bitmese bile cachelenir. Free-tier bilgisi metadata olarak saklanır (`is_free`); NVIDIA NIM live satırları free credit-backed model olarak işaretlenir (`free` + `credits-based`), diğer non-free live satırlar varsayılan olarak `credits-based` budget label alır. Exact live model ID'ler doğrudan route edilebilir ve yeni keşfedilen built-in live satırların auto-fallback satırı varsayılan olarak disabled kalır, böylece `auto` beklenmedik kredi tüketmez.
 
 Package config default değeri `auto` olarak kalır. Kullanıcı CLI üzerinden default model seçtiğinde seçim package settings tablosuna yazılır ve runtime sırasında `LaravelAiRouterProvider::defaultTextModel()` tarafından okunur. Bu işlem config dosyalarını değiştirmez.
 
@@ -255,7 +255,7 @@ $response = ai()
     ->asText();
 ```
 
-`LaravelAiRouterProvider::models()` tarafından dönen exact model ID'ler, auto-fallback satırı disabled olsa bile doğrudan route edilebilir. Credits-based live modeller için varsayılan davranış budur.
+`LaravelAiRouterProvider::models()` tarafından dönen exact model ID'ler, auto-fallback satırı disabled olsa bile doğrudan route edilebilir. NVIDIA'nın free credit-backed catalog'u dahil yeni keşfedilen built-in live modeller için varsayılan davranış budur.
 
 Agent attribute kullanımı:
 

@@ -49,7 +49,7 @@ it('caches available live models by provider and label while preserving free met
     expect($provider->models('openrouter', 'Primary'))->toBe(['auto', 'paid/model', 'qwen/qwen3-coder:free']);
 });
 
-it('caches nvidia live models as credits based available models', function () {
+it('caches nvidia live models as free credit-backed available models', function () {
     migrateLaravelAiRouterForCacheTests();
 
     Http::fake([
@@ -82,13 +82,17 @@ it('caches nvidia live models as credits based available models', function () {
         'nvidia/nemotron-nano-9b-v2',
     ]);
 
-    expect($models->every(fn (LaravelAiRouterProviderModelCache $model): bool => $model->is_free === false))->toBeTrue();
+    expect($models->every(fn (LaravelAiRouterProviderModelCache $model): bool => $model->is_free === true))->toBeTrue();
     expect($models->every(fn (LaravelAiRouterProviderModelCache $model): bool => $model->budget_label === 'credits-based'))->toBeTrue();
     expect($models->firstWhere('model_id', 'meta/llama-3.1-70b-instruct')->supports_tools)->toBeTrue();
     expect(app(ProviderModelCacheService::class)->modelIds('nvidia', 'NVIDIA', includeAuto: false))->toBe([
         'meta/llama-3.1-70b-instruct',
         'nvidia/nemotron-nano-9b-v2',
     ]);
+
+    expect(app(ProviderModelCacheService::class)->choicesForKey($key)['meta/llama-3.1-70b-instruct'])
+        ->toContain('free')
+        ->toContain('credits-based');
 });
 
 it('falls back to curated models when a provider cannot return a live model list', function () {

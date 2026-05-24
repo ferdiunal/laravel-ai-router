@@ -226,7 +226,7 @@ The command can refresh the selected key's cache, list cached available models, 
 - The cache row matches the provider key ID, platform, and label.
 - The cache row is enabled.
 
-Live model discovery is provider-agnostic for routable OpenAI-compatible providers: valid `/models` rows are cached even when their IDs do not end in `:free`. Free-tier status is stored as metadata (`is_free`); non-free live rows default to the `credits-based` budget label, are routeable by exact model ID, and keep their auto-fallback row disabled by default so `auto` does not unexpectedly spend credits.
+Live model discovery is provider-agnostic for routable OpenAI-compatible providers: valid `/models` rows are cached even when their IDs do not end in `:free`. Free-tier status is stored as metadata (`is_free`); NVIDIA NIM live rows are marked as free credit-backed models (`free` + `credits-based`), while other non-free live rows default to the `credits-based` budget label. Exact live model IDs are routeable directly, and newly discovered built-in live rows keep their auto-fallback row disabled by default so `auto` does not unexpectedly spend credits.
 
 The package config default remains `auto`. When the user selects a default model through the CLI, the selection is persisted in the package settings table and read at runtime by `LaravelAiRouterProvider::defaultTextModel()`. This does not mutate config files.
 
@@ -255,7 +255,7 @@ $response = ai()
     ->asText();
 ```
 
-Exact model IDs returned by `LaravelAiRouterProvider::models()` can be routed directly even when their auto-fallback row is disabled, which is the default for credits-based live models.
+Exact model IDs returned by `LaravelAiRouterProvider::models()` can be routed directly even when their auto-fallback row is disabled, which is the default for newly discovered built-in live models including NVIDIA's free credit-backed catalog.
 
 Agent attribute usage:
 

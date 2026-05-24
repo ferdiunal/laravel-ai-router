@@ -26,7 +26,7 @@ final class ProviderAdapterRegistry
             return false;
         }
 
-        return in_array($definition['adapter'] ?? null, ['openai-compatible', 'cohere'], true);
+        return in_array($definition['adapter'] ?? null, ['openai-compatible', 'cohere', 'google-ai-studio', 'cloudflare-workers-ai'], true);
     }
 
     /**
@@ -35,6 +35,14 @@ final class ProviderAdapterRegistry
     public function for(string $platform): ProviderAdapter
     {
         $definition = ProviderCatalog::get($platform);
+
+        if (($definition['adapter'] ?? null) === 'google-ai-studio') {
+            return new GoogleAiStudioAdapter;
+        }
+
+        if (($definition['adapter'] ?? null) === 'cloudflare-workers-ai') {
+            return new CloudflareWorkersAiAdapter;
+        }
 
         if (($definition['adapter'] ?? null) === 'openai-compatible' || ($definition['adapter'] ?? null) === 'cohere') {
             return new OpenAiCompatibleAdapter(

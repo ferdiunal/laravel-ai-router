@@ -7,6 +7,7 @@ use Ferdiunal\LaravelAiRouter\Catalog\ProviderCatalog;
 
 it('contains the active laravel-ai-router provider platforms', function () {
     expect(array_keys(ProviderCatalog::all()))->toBe([
+        'google',
         'cohere',
         'groq',
         'cerebras',
@@ -15,6 +16,7 @@ it('contains the active laravel-ai-router provider platforms', function () {
         'mistral',
         'openrouter',
         'github',
+        'cloudflare',
         'zhipu',
         'ollama',
         'kilo',

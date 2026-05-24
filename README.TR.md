@@ -16,6 +16,7 @@ Bu release içindeki built-in routable provider listesi, implement edilmiş ve t
 
 | Provider | Adapter |
 | --- | --- |
+| Google AI Studio | Native Gemini `generateContent` / `streamGenerateContent` |
 | Cohere | OpenAI-compatible compatibility API |
 | Groq | OpenAI-compatible |
 | Cerebras | OpenAI-compatible |
@@ -24,13 +25,14 @@ Bu release içindeki built-in routable provider listesi, implement edilmiş ve t
 | Mistral | OpenAI-compatible |
 | OpenRouter | OpenAI-compatible |
 | GitHub Models | OpenAI-compatible |
+| Cloudflare Workers AI | Account-scoped OpenAI-compatible Workers AI endpoint |
 | Zhipu AI | OpenAI-compatible |
 | Ollama Cloud | OpenAI-compatible |
 | Kilo Gateway | OpenAI-compatible, anonymous placeholder key destekli |
 | Pollinations | OpenAI-compatible, anonymous placeholder key destekli |
 | LLM7 | OpenAI-compatible, anonymous placeholder key destekli |
 
-Google Gemini ve Cloudflare Workers AI native adapterları, provider-specific adapter implement edilene kadar built-in routable provider olarak advertise edilmez.
+Google AI Studio Google API-key query authentication kullanır. Cloudflare Workers AI provider key değeri `account_id:api_token` formatında olmalıdır; adapter bu değerden account-scoped Workers AI URL'lerini kurar.
 
 Free-tier ve anonymous provider'lar limit, model availability, authentication davranışı veya kullanım şartlarını haber vermeden değiştirebilir. Her upstream provider'ın terms, quota ve SLA duruşunu production use case'in için ayrıca doğrulamadıysan free-tier routing'i development/prototype infrastructure olarak ele al.
 
@@ -41,6 +43,7 @@ Free-tier ve anonymous provider'lar limit, model availability, authentication da
 - Varsayılan text model: `auto`.
 - Provider API key yönetimi: ekle, listele, aktif et, pasif et, sil.
 - Runtime custom OpenAI-compatible provider yönetimi: ekle, listele, aktif et, pasif et, sil.
+- Provider model discovery/cache destekli native Google AI Studio ve Cloudflare Workers AI adapterları.
 - Laravel encryption ile encrypted API-key saklama.
 - Maskelenmiş CLI çıktısı; raw provider key değerleri yazdırılmaz.
 - Provider + label scope'lu, free/credits metadata içeren available-model cache.
@@ -162,6 +165,8 @@ php artisan laravel-ai-router:provider:remove
 5. Cached available modeller içinden opsiyonel default model seçimi.
 
 Raw API key persistence öncesi encrypt edilir ve command output içinde hiçbir zaman gösterilmez. Listeleme ve prompt ekranlarında sadece masked credential kullanılır.
+
+Cloudflare Workers AI key değeri paket içinde `account_id:api_token` olarak saklanır; adapter account-scoped request göndermeden önce bu değeri ayırır ve upstream bearer credential olarak sadece token kısmını gönderir.
 
 ## Runtime Custom OpenAI-compatible Provider'lar
 

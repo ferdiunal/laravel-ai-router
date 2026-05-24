@@ -2,6 +2,21 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.4.0 - 2026-05-24
+
+### Summary
+
+- Added native Google AI Studio/Gemini routing with `generateContent`, `streamGenerateContent`, model discovery, system instruction mapping, generation config mapping, and function-call/tool-call normalization.
+- Added Cloudflare Workers AI routing through the account-scoped OpenAI-compatible endpoint, including `account_id:api_token` key handling, token verification, model search cache mapping, and null-content normalization for assistant/tool messages.
+- Added a balanced random `auto` routing strategy that can shuffle only the top safe fallback pool while preserving exact-model routing and existing eligibility filters.
+- Updated English and Turkish documentation for built-in routable providers, Cloudflare key shape, and balanced routing configuration.
+
+### Validation
+
+- `composer validate --strict` — valid.
+- `composer ci` — 149 passed, 1 skipped, 486 assertions.
+- `git diff --check` — clean.
+
 ## v0.3.0 - 2026-05-24
 
 ### Summary

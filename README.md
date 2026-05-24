@@ -16,6 +16,7 @@ Built-in routable providers in this release are limited to adapters that are imp
 
 | Provider | Adapter |
 | --- | --- |
+| Google AI Studio | Native Gemini `generateContent` / `streamGenerateContent` |
 | Cohere | OpenAI-compatible compatibility API |
 | Groq | OpenAI-compatible |
 | Cerebras | OpenAI-compatible |
@@ -24,13 +25,14 @@ Built-in routable providers in this release are limited to adapters that are imp
 | Mistral | OpenAI-compatible |
 | OpenRouter | OpenAI-compatible |
 | GitHub Models | OpenAI-compatible |
+| Cloudflare Workers AI | Account-scoped OpenAI-compatible Workers AI endpoint |
 | Zhipu AI | OpenAI-compatible |
 | Ollama Cloud | OpenAI-compatible |
 | Kilo Gateway | OpenAI-compatible, anonymous placeholder key supported |
 | Pollinations | OpenAI-compatible, anonymous placeholder key supported |
 | LLM7 | OpenAI-compatible, anonymous placeholder key supported |
 
-Google Gemini and Cloudflare Workers AI native adapters are intentionally not advertised as built-in routable providers until provider-specific adapters are implemented.
+Google AI Studio uses Google API-key query authentication. Cloudflare Workers AI provider keys must use `account_id:api_token` so the adapter can build account-scoped Workers AI URLs.
 
 Free-tier and anonymous providers can change limits, model availability, authentication behavior, or terms of service without notice. Treat free-tier routing as development/prototype infrastructure unless you have reviewed each upstream provider's terms, quota, and SLA posture for your production use case.
 
@@ -41,6 +43,7 @@ Free-tier and anonymous providers can change limits, model availability, authent
 - Default text model: `auto`.
 - Provider API key management: add, list, enable, disable, remove.
 - Runtime custom OpenAI-compatible provider definitions: add, list, enable, disable, remove.
+- Native Google AI Studio and Cloudflare Workers AI adapters with provider model discovery/cache support.
 - Encrypted API-key storage through Laravel encryption.
 - Masked CLI output; raw provider keys are not printed.
 - Provider + label scoped available-model cache with free/credits metadata.
@@ -162,6 +165,8 @@ php artisan laravel-ai-router:provider:remove
 5. Optional default model selection from cached available models.
 
 The raw API key is encrypted before persistence and is never rendered in command output. Lists and prompts show masked credentials only.
+
+Cloudflare Workers AI keys are stored in the package as `account_id:api_token`; the adapter splits that value before dispatching account-scoped requests and only sends the token as the upstream bearer credential.
 
 ## Runtime Custom OpenAI-compatible Providers
 

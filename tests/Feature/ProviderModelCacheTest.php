@@ -140,19 +140,35 @@ it('marks provider keys invalid on model refresh auth failures without falling b
     expect(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->where('enabled', true)->count())->toBe(0);
 });
 
-it('does not cache models for providers without a routable adapter', function () {
+it('caches google live Gemini models through the native adapter', function () {
     migrateLaravelAiRouterForCacheTests();
 
-    $key = LaravelAiRouterProviderKey::query()->create([
-        'platform' => 'google',
-        'label' => 'Unsupported',
-        'key' => 'key-google-value-123456',
-        'status' => 'unknown',
-        'enabled' => true,
+    Http::fake([
+        'https://generativelanguage.googleapis.com/v1beta/models?key=key-google-value-123456' => Http::response([
+            'models' => [[
+                'name' => 'models/gemini-2.5-flash',
+                'displayName' => 'Gemini 2.5 Flash',
+                'inputTokenLimit' => 1048576,
+                'supportedGenerationMethods' => ['generateContent', 'streamGenerateContent'],
+            ], [
+                'name' => 'models/embedding-001',
+                'displayName' => 'Embedding',
+                'supportedGenerationMethods' => ['embedContent'],
+            ]],
+        ]),
     ]);
 
-    expect(app(ProviderModelCacheService::class)->refreshForKey($key))->toBe([]);
-    expect(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->count())->toBe(0);
+    $key = app(ProviderKeyManager::class)->add('google', 'key-google-value-123456', 'Google', refreshModels: true);
+
+    $models = LaravelAiRouterProviderModelCache::query()
+        ->where('provider_key_id', $key->getKey())
+        ->orderBy('model_id')
+        ->get();
+
+    expect($models->pluck('model_id')->all())->toBe(['gemini-2.5-flash']);
+    expect($models->first()->context_window)->toBe(1048576);
+    expect($models->first()->supports_tools)->toBeNull();
+    expect(app(ProviderModelCacheService::class)->modelIds('google', 'Google', includeAuto: false))->toBe(['gemini-2.5-flash']);
 });
 
 it('excludes expired provider label model cache rows from model listings', function () {
@@ -223,7 +239,7 @@ it('exposes cached model choices only for routable healthy provider keys', funct
     $usable = $makeKeyWithCache('openrouter', 'Usable');
     $invalid = $makeKeyWithCache('openrouter', 'Invalid', status: 'invalid');
     $disabled = $makeKeyWithCache('openrouter', 'Disabled', enabled: false);
-    $unsupported = $makeKeyWithCache('google', 'Unsupported');
+    $unsupported = $makeKeyWithCache('legacy-unsupported', 'Unsupported');
 
     expect($service->cachedModelsForKey($usable))->toHaveCount(1);
     expect($service->choicesForKey($usable))->toHaveKey('usable/model:free');

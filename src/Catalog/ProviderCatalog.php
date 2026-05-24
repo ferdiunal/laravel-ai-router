@@ -40,6 +40,13 @@ final class ProviderCatalog
     public static function builtIn(): array
     {
         return [
+            'google' => [
+                'name' => 'Google AI Studio',
+                'adapter' => 'google-ai-studio',
+                'base_url' => 'https://generativelanguage.googleapis.com/v1beta',
+                'requires_placeholder_key' => false,
+                'custom' => false,
+            ],
             'cohere' => [
                 'name' => 'Cohere',
                 'adapter' => 'cohere',
@@ -54,6 +61,13 @@ final class ProviderCatalog
             'mistral' => self::openAiCompatible('Mistral', 'https://api.mistral.ai/v1'),
             'openrouter' => self::openAiCompatible('OpenRouter', 'https://openrouter.ai/api/v1'),
             'github' => self::openAiCompatible('GitHub Models', 'https://models.github.ai/inference'),
+            'cloudflare' => [
+                'name' => 'Cloudflare Workers AI',
+                'adapter' => 'cloudflare-workers-ai',
+                'base_url' => 'https://api.cloudflare.com/client/v4',
+                'requires_placeholder_key' => false,
+                'custom' => false,
+            ],
             'zhipu' => self::openAiCompatible('Zhipu AI', 'https://open.bigmodel.cn/api/paas/v4'),
             'ollama' => self::openAiCompatible('Ollama Cloud', 'https://ollama.com/v1', timeoutMs: 120_000),
             'kilo' => self::openAiCompatible('Kilo Gateway', 'https://api.kilo.ai/api/gateway/v1', requiresPlaceholderKey: true),

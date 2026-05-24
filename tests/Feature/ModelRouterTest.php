@@ -42,6 +42,34 @@ it('auto routes to the first enabled fallback with an enabled non-invalid key', 
         ->and($route->apiKey)->toBe('key-openrouter-value-123456');
 });
 
+it('composes cloudflare route credentials from separate account metadata and encrypted token', function () {
+    migrateLaravelAiRouterForRouterTests();
+
+    $model = LaravelAiRouterModel::query()->create([
+        'platform' => 'cloudflare',
+        'model_id' => '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+        'display_name' => 'Llama 3.3 70B fp8-fast',
+        'intelligence_rank' => 9,
+        'speed_rank' => 11,
+        'enabled' => true,
+    ]);
+
+    LaravelAiRouterProviderKey::query()->create([
+        'platform' => 'cloudflare',
+        'label' => 'Workers',
+        'key' => 'cf-token-secret-123456',
+        'credential_metadata' => ['account_id' => 'account-123'],
+        'status' => 'healthy',
+        'enabled' => true,
+    ]);
+
+    $route = app(ModelRouter::class)->route('@cf/meta/llama-3.3-70b-instruct-fp8-fast');
+
+    expect($route->platform)->toBe('cloudflare')
+        ->and($route->modelId)->toBe($model->model_id)
+        ->and($route->apiKey)->toBe('account-123:cf-token-secret-123456');
+});
+
 it('skips disabled and invalid provider keys', function () {
     migrateLaravelAiRouterForRouterTests();
     app(SeedModelCatalog::class)->seed();

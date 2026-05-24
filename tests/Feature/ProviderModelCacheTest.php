@@ -144,7 +144,7 @@ it('caches google live Gemini models through the native adapter', function () {
     migrateLaravelAiRouterForCacheTests();
 
     Http::fake([
-        'https://generativelanguage.googleapis.com/v1beta/models?key=key-google-value-123456' => Http::response([
+        'https://generativelanguage.googleapis.com/v1beta/models?key=*' => Http::response([
             'models' => [[
                 'name' => 'models/gemini-2.5-flash',
                 'displayName' => 'Gemini 2.5 Flash',
@@ -169,6 +169,36 @@ it('caches google live Gemini models through the native adapter', function () {
     expect($models->first()->context_window)->toBe(1048576);
     expect($models->first()->supports_tools)->toBeNull();
     expect(app(ProviderModelCacheService::class)->modelIds('google', 'Google', includeAuto: false))->toBe(['gemini-2.5-flash']);
+});
+
+it('refreshes cloudflare models with stored account metadata and token-only bearer auth', function () {
+    migrateLaravelAiRouterForCacheTests();
+
+    Http::fake([
+        'https://api.cloudflare.com/client/v4/accounts/account-123/ai/models/search' => Http::response([
+            'result' => [[
+                'name' => '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+                'display_name' => 'Llama 3.3 70B fp8-fast',
+                'properties' => ['context_window' => 131072],
+            ]],
+        ]),
+    ]);
+
+    $key = app(ProviderKeyManager::class)->add(
+        'cloudflare',
+        'cf-token-secret-123456',
+        'Workers',
+        refreshModels: true,
+        credentialMetadata: ['account_id' => 'account-123'],
+    );
+
+    expect($key->key)->toBe('cf-token-secret-123456')
+        ->and($key->credential_metadata)->toBe(['account_id' => 'account-123'])
+        ->and(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->pluck('model_id')->all())
+        ->toBe(['@cf/meta/llama-3.3-70b-instruct-fp8-fast']);
+
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://api.cloudflare.com/client/v4/accounts/account-123/ai/models/search'
+        && $request->hasHeader('Authorization', 'Bearer cf-token-secret-123456'));
 });
 
 it('excludes expired provider label model cache rows from model listings', function () {

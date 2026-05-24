@@ -32,7 +32,7 @@ Built-in routable providers in this release are limited to adapters that are imp
 | Pollinations | OpenAI-compatible, anonymous placeholder key supported |
 | LLM7 | OpenAI-compatible, anonymous placeholder key supported |
 
-Google AI Studio uses Google API-key query authentication. Cloudflare Workers AI provider keys must use `account_id:api_token` so the adapter can build account-scoped Workers AI URLs.
+Google AI Studio uses Google API-key query authentication. Cloudflare Workers AI asks for the account ID separately from the API token; the token is encrypted as the provider key and the account ID is stored as credential metadata so the adapter can build account-scoped Workers AI URLs without packing both values into one secret.
 
 Free-tier and anonymous providers can change limits, model availability, authentication behavior, or terms of service without notice. Treat free-tier routing as development/prototype infrastructure unless you have reviewed each upstream provider's terms, quota, and SLA posture for your production use case.
 
@@ -159,14 +159,14 @@ php artisan laravel-ai-router:provider:remove
 `laravel-ai-router:provider:add` uses Laravel Prompts to collect:
 
 1. Provider platform.
-2. API key.
-3. Provider-key label.
-4. Optional model-cache refresh.
-5. Optional default model selection from cached available models.
+2. Provider-specific credential metadata when required, for example Cloudflare account ID.
+3. API key or API token.
+4. Provider-key label.
+5. Optional default model selection from cached available models after the automatic model-cache refresh.
 
 The raw API key is encrypted before persistence and is never rendered in command output. Lists and prompts show masked credentials only.
 
-Cloudflare Workers AI keys are stored in the package as `account_id:api_token`; the adapter splits that value before dispatching account-scoped requests and only sends the token as the upstream bearer credential.
+Cloudflare Workers AI stores `account_id` separately in `credential_metadata` while encrypting only the API token in the key field. During routing and model discovery the package composes the adapter-facing `account_id:api_token` credential internally, then sends only the token as the upstream bearer credential. Legacy `account_id:api_token` input is still split into separate storage fields when adding a key.
 
 ## Runtime Custom OpenAI-compatible Providers
 

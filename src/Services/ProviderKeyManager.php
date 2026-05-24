@@ -22,8 +22,10 @@ final class ProviderKeyManager
 
     /**
      * Store an encrypted provider key and optionally refresh its provider-label-scoped model cache.
+     *
+     * @param  array<string, mixed>  $credentialMetadata
      */
-    public function add(string $platform, string $apiKey, string $label, bool $refreshModels = true): LaravelAiRouterProviderKey
+    public function add(string $platform, string $apiKey, string $label, bool $refreshModels = true, array $credentialMetadata = []): LaravelAiRouterProviderKey
     {
         $definition = ProviderCatalog::get($platform);
 
@@ -41,6 +43,8 @@ final class ProviderKeyManager
             }
         }
 
+        [$apiKey, $credentialMetadata] = $this->normalizeCredentialMetadata($platform, $apiKey, $credentialMetadata);
+
         $exists = LaravelAiRouterProviderKey::query()
             ->where('platform', $platform)
             ->where('label', $label)
@@ -54,6 +58,7 @@ final class ProviderKeyManager
             'platform' => $platform,
             'label' => $label,
             'key' => $apiKey,
+            'credential_metadata' => $credentialMetadata === [] ? null : $credentialMetadata,
             'status' => 'unknown',
             'enabled' => true,
         ]);
@@ -82,5 +87,58 @@ final class ProviderKeyManager
         $key->forceFill(['enabled' => $enabled])->save();
 
         return $key->refresh();
+    }
+
+    /**
+     * Normalize provider-specific credential metadata without keeping Cloudflare account IDs inside encrypted token values.
+     *
+     * @param  array<string, mixed>  $credentialMetadata
+     * @return array{0: string, 1: array<string, mixed>}
+     */
+    private function normalizeCredentialMetadata(string $platform, string $apiKey, array $credentialMetadata): array
+    {
+        if ($platform !== 'cloudflare') {
+            return [$apiKey, $this->filledStringMetadata($credentialMetadata)];
+        }
+
+        $accountId = trim((string) ($credentialMetadata['account_id'] ?? $credentialMetadata['accountId'] ?? ''));
+
+        if ($accountId === '' && str_contains($apiKey, ':')) {
+            [$accountId, $apiKey] = explode(':', $apiKey, 2);
+            $accountId = trim($accountId);
+            $apiKey = trim($apiKey);
+        }
+
+        if ($accountId === '') {
+            throw ValidationException::withMessages(['account_id' => 'Cloudflare Workers AI account ID is required.']);
+        }
+
+        if ($apiKey === '') {
+            throw ValidationException::withMessages(['api_key' => 'Cloudflare Workers AI API token is required.']);
+        }
+
+        return [$apiKey, ['account_id' => $accountId]];
+    }
+
+    /**
+     * Keep only non-empty scalar metadata values so provider key rows do not store prompt noise.
+     *
+     * @param  array<string, mixed>  $credentialMetadata
+     * @return array<string, mixed>
+     */
+    private function filledStringMetadata(array $credentialMetadata): array
+    {
+        $metadata = [];
+
+        foreach ($credentialMetadata as $key => $value) {
+            if (is_scalar($value)) {
+                $value = trim((string) $value);
+                if ($value !== '') {
+                    $metadata[$key] = $value;
+                }
+            }
+        }
+
+        return $metadata;
     }
 }

@@ -40,10 +40,11 @@ final class ProviderKeySetupWizard
         $platform = $this->providerPrompt($interactive);
         $definition = ProviderCatalog::get($platform);
         $placeholder = ($definition['requires_placeholder_key'] ?? false) ? ProviderKeyManager::ANONYMOUS_PLACEHOLDER_KEY : '';
-        $apiKey = $this->apiKeyPrompt($interactive, $placeholder);
+        $credentialMetadata = $this->credentialMetadataPrompt($platform, $interactive);
+        $apiKey = $this->apiKeyPrompt($interactive, $placeholder, $platform);
         $label = $this->labelPrompt($interactive);
 
-        $key = $this->keys->add($platform, $apiKey !== '' ? $apiKey : $placeholder, $label, refreshModels: true);
+        $key = $this->keys->add($platform, $apiKey !== '' ? $apiKey : $placeholder, $label, refreshModels: true, credentialMetadata: $credentialMetadata);
 
         info("Added {$key->platform} / {$key->label} ({$key->masked_key}).");
 
@@ -88,11 +89,35 @@ final class ProviderKeySetupWizard
     }
 
     /**
+     * Prompt for provider-specific credential metadata that should not be packed into the API token field.
+     *
+     * @return array<string, string>
+     */
+    private function credentialMetadataPrompt(string $platform, bool $interactive): array
+    {
+        if ($platform !== 'cloudflare') {
+            return [];
+        }
+
+        $accountId = $interactive ? text(
+            label: 'Cloudflare account ID',
+            placeholder: 'a1b2c3d4...',
+            required: true,
+        ) : '';
+
+        $accountId = trim($accountId);
+
+        return $accountId === '' ? [] : ['account_id' => $accountId];
+    }
+
+    /**
      * Prompt for a provider API key while keeping the raw credential out of command output.
      */
-    private function apiKeyPrompt(bool $interactive, string $default): string
+    private function apiKeyPrompt(bool $interactive, string $default, string $platform): string
     {
-        return $interactive ? password('API key', required: $default === '') : $default;
+        $label = $platform === 'cloudflare' ? 'Cloudflare API token' : 'API key';
+
+        return $interactive ? password($label, required: $default === '') : $default;
     }
 
     /**

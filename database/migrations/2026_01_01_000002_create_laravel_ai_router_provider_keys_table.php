@@ -21,6 +21,7 @@ return new class extends Migration
             $table->string('platform');
             $table->string('label');
             $table->text('encrypted_key');
+            $table->json('credential_metadata')->nullable();
             $table->string('status')->default('unknown');
             $table->boolean('enabled')->default(true);
             $table->timestamp('last_checked_at')->nullable();

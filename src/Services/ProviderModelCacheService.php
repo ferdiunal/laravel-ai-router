@@ -46,7 +46,7 @@ final class ProviderModelCacheService
         }
 
         try {
-            $models = $this->adapters->for($key->platform)->models((string) $key->key);
+            $models = $this->adapters->for($key->platform)->models($key->credentialForProvider());
         } catch (ProviderAuthenticationException) {
             $this->disableCacheRows($key);
             $this->markKeyInvalid($key);

@@ -233,7 +233,7 @@ final class ModelRouter
             modelDbId: (int) $model->getKey(),
             displayName: $model->display_name,
             keyId: (int) $key->getKey(),
-            apiKey: (string) $key->key,
+            apiKey: $key->credentialForProvider(),
             providerLabel: (string) $key->label,
         );
     }

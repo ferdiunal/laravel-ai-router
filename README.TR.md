@@ -32,7 +32,7 @@ Bu release içindeki built-in routable provider listesi, implement edilmiş ve t
 | Pollinations | OpenAI-compatible, anonymous placeholder key destekli |
 | LLM7 | OpenAI-compatible, anonymous placeholder key destekli |
 
-Google AI Studio Google API-key query authentication kullanır. Cloudflare Workers AI provider key değeri `account_id:api_token` formatında olmalıdır; adapter bu değerden account-scoped Workers AI URL'lerini kurar.
+Google AI Studio Google API-key query authentication kullanır. Cloudflare Workers AI için account ID, API token'dan ayrı istenir; token provider key olarak encrypt edilir, account ID ise credential metadata içinde saklanır. Böylece adapter account-scoped Workers AI URL'lerini kurarken iki değeri tek secret alanına paketlemez.
 
 Free-tier ve anonymous provider'lar limit, model availability, authentication davranışı veya kullanım şartlarını haber vermeden değiştirebilir. Her upstream provider'ın terms, quota ve SLA duruşunu production use case'in için ayrıca doğrulamadıysan free-tier routing'i development/prototype infrastructure olarak ele al.
 
@@ -159,14 +159,14 @@ php artisan laravel-ai-router:provider:remove
 `laravel-ai-router:provider:add` Laravel Prompts ile şu girdileri alır:
 
 1. Provider platform.
-2. API key.
-3. Provider-key label.
-4. Opsiyonel model-cache refresh.
-5. Cached available modeller içinden opsiyonel default model seçimi.
+2. Gerekiyorsa provider-specific credential metadata; örneğin Cloudflare account ID.
+3. API key veya API token.
+4. Provider-key label.
+5. Otomatik model-cache refresh sonrası cached available modeller içinden opsiyonel default model seçimi.
 
 Raw API key persistence öncesi encrypt edilir ve command output içinde hiçbir zaman gösterilmez. Listeleme ve prompt ekranlarında sadece masked credential kullanılır.
 
-Cloudflare Workers AI key değeri paket içinde `account_id:api_token` olarak saklanır; adapter account-scoped request göndermeden önce bu değeri ayırır ve upstream bearer credential olarak sadece token kısmını gönderir.
+Cloudflare Workers AI için `account_id`, `credential_metadata` içinde ayrı saklanır; key alanında sadece API token encrypt edilir. Routing ve model discovery sırasında paket adapter'a gidecek `account_id:api_token` credential'ını içeride üretir, upstream bearer credential olarak sadece token kısmını gönderir. Eski `account_id:api_token` girdileri de key eklenirken ayrı storage alanlarına bölünür.
 
 ## Runtime Custom OpenAI-compatible Provider'lar
 

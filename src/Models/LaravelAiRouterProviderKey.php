@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Crypt;
  * @property string $platform
  * @property string $label
  * @property string $encrypted_key
+ * @property array<string, mixed>|null $credential_metadata
  * @property string|null $key
  * @property string $masked_key
  * @property string $status
@@ -48,6 +49,7 @@ final class LaravelAiRouterProviderKey extends LaravelAiRouterBaseModel
     protected function casts(): array
     {
         return [
+            'credential_metadata' => 'array',
             'enabled' => 'bool',
             'last_checked_at' => 'datetime',
             'last_used_at' => 'datetime',
@@ -77,6 +79,26 @@ final class LaravelAiRouterProviderKey extends LaravelAiRouterBaseModel
     protected function maskedKey(): Attribute
     {
         return Attribute::get(fn (): string => KeyMasker::mask($this->key));
+    }
+
+    /**
+     * Return the adapter-facing credential string while keeping persisted Cloudflare account IDs separate from tokens.
+     */
+    public function credentialForProvider(): string
+    {
+        $apiKey = (string) $this->key;
+
+        if ($this->platform !== 'cloudflare' || str_contains($apiKey, ':')) {
+            return $apiKey;
+        }
+
+        $accountId = trim((string) data_get($this->credential_metadata, 'account_id', ''));
+
+        if ($accountId === '') {
+            return $apiKey;
+        }
+
+        return $accountId.':'.$apiKey;
     }
 
     /**

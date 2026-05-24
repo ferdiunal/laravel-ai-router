@@ -2,6 +2,22 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.4.3 - 2026-05-24
+
+### Fixed
+
+- Changed Cloudflare Workers AI provider-key setup to ask for account ID separately from the API token.
+- Store Cloudflare account IDs in provider-key `credential_metadata` while encrypting only the API token in the key field; routing/model discovery still composes the adapter-facing `account_id:api_token` credential internally.
+- Preserve backwards compatibility by splitting legacy `account_id:api_token` input into separate storage fields when adding Cloudflare keys.
+
+### Validation
+
+- `composer validate --strict` — valid.
+- `composer ci` — 158 passed, 1 skipped, 506 assertions.
+- `git diff --check` — clean.
+
+**Full Changelog**: https://github.com/ferdiunal/laravel-ai-router/compare/v0.4.2...v0.4.3
+
 ## v0.4.2 - 2026-05-24
 
 **Full Changelog**: https://github.com/ferdiunal/laravel-ai-router/compare/v0.4.1...v0.4.2

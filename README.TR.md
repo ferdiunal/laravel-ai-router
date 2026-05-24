@@ -37,6 +37,7 @@ Free-tier ve anonymous provider'lar limit, model availability, authentication da
 ## Özellikler
 
 - Laravel AI driver adı: `laravel-ai-router`.
+- Tinker ve küçük call site'lar için `using(...)->prompt(...)->asText()` convenience flow sağlayan global `ai()` helper.
 - Varsayılan text model: `auto`.
 - Provider API key yönetimi: ekle, listele, aktif et, pasif et, sil.
 - Runtime custom OpenAI-compatible provider yönetimi: ekle, listele, aktif et, pasif et, sil.
@@ -246,18 +247,77 @@ $modelIds = $provider->models('openrouter', 'Primary');
 
 ## Prompt Kullanımı
 
-`auto` model değeri, request'in uygun provider key ve fallback-enabled cached modele route edilmesini sağlar:
+Prompt göndermeden önce install/setup akışını çalıştırıp en az bir enabled provider key ekle:
+
+```bash
+php artisan laravel-ai-router:install
+php artisan laravel-ai-router:provider:add
+```
+
+Laravel AI Router iki şekilde çağrılabilir:
+
+1. Paketin convenience helper'ı: `ai()->using(...)->prompt(...)->asText()`.
+2. Native Laravel AI agent sınıfları: `Laravel\Ai\Contracts\Agent` implement eden ve `Laravel\Ai\Promptable` kullanan class'lar.
+
+### Tinker'da hızlı `ai()` helper kullanımı
+
+Paket, Tinker ve küçük application call site'ları için global `ai()` helper fonksiyonu sağlar. Bu helper Laravel AI Router'ın convenience helper'ını döndürür; Laravel AI SDK facade'inin birebir aynısı değildir.
+
+```bash
+php artisan tinker
+```
 
 ```php
-$response = ai()
+ai()
     ->using('laravel-ai-router', 'auto')
+    ->instructions('Kısa cevap ver ve operasyonel olarak önemli detayları ekle.')
     ->prompt('Bu destek kaydını üç maddeyle özetle.')
     ->asText();
 ```
 
-`LaravelAiRouterProvider::models()` tarafından dönen exact model ID'ler, auto-fallback satırı disabled olsa bile doğrudan route edilebilir. NVIDIA'nın free credit-backed catalog'u dahil yeni keşfedilen built-in live modeller için varsayılan davranış budur.
+`auto`, Laravel AI Router'ın uygun provider key ve fallback-enabled cached model seçmesini sağlar. Cached exact model ID ile de route edebilirsin:
 
-Agent attribute kullanımı:
+```php
+ai()
+    ->using('laravel-ai-router', 'qwen/qwen3-coder:free')
+    ->prompt('Kısa bir release note yaz.')
+    ->asText();
+```
+
+Sadece text değil, tam Laravel AI response objesine ihtiyaç duyduğunda `response()` kullan:
+
+```php
+$response = ai()
+    ->using('laravel-ai-router', 'auto')
+    ->timeout(20)
+    ->prompt('Sipariş durumunu özetle.')
+    ->response();
+
+(string) $response;              // response text
+$response->usage->promptTokens;  // input token sayısı
+$response->usage->completionTokens;
+$response->meta->provider;       // "laravel-ai-router"
+$response->meta->model;          // route edilen upstream model ID
+```
+
+Low-level SDK erişimi gerektiğinde helper içindeki Laravel AI manager'a erişebilirsin:
+
+```php
+use Ferdiunal\LaravelAiRouter\LaravelAiRouterProvider;
+
+$provider = ai()->manager()->textProvider('laravel-ai-router');
+
+assert($provider instanceof LaravelAiRouterProvider);
+
+$models = $provider->models('openrouter', 'Primary');
+// ['auto', 'paid/model', 'qwen/qwen3-coder:free', ...]
+```
+
+`ai()` üzerinde bilinmeyen method çağrıları underlying `Laravel\Ai\AiManager` instance'ına proxy edilir. Bu yüzden `ai()->textProvider('laravel-ai-router')` da çalışır.
+
+### Native Laravel AI agent kullanımı
+
+Production kodunda named agent class genelde daha test edilebilir ve tekrar kullanılabilir olur:
 
 ```php
 use Laravel\Ai\Attributes\Model;
@@ -278,6 +338,23 @@ final class SupportAgent implements Agent
 }
 ```
 
+```php
+$response = SupportAgent::make()->prompt('Sipariş durumunu özetle.');
+
+echo (string) $response;
+```
+
+Provider/model değerini call bazında override edebilirsin:
+
+```php
+$response = SupportAgent::make()->prompt(
+    'Sipariş durumunu özetle.',
+    provider: 'laravel-ai-router',
+    model: 'qwen/qwen3-coder:free',
+    timeout: 20,
+);
+```
+
 Laravel AI provider array ile failover kullanımı:
 
 ```php
@@ -292,6 +369,183 @@ $response = SupportAgent::make()->prompt(
 ```
 
 Retryable rate-limit, geçici overload, timeout ve insufficient-credit durumları mümkün olduğunda Laravel AI failover-compatible exception tiplerine map edilir.
+
+## Function Tool Kullanımı
+
+Laravel AI Router, non-streaming OpenAI-compatible tool call destekler. Tool'lar normal Laravel AI `Tool` class'larıdır; router schema bilgisini OpenAI-compatible `tools` payload'una map eder, provider'ın istediği tool call'ları local olarak çalıştırır ve tool result mesajlarını seçilen provider'a geri gönderir.
+
+> Streaming tool call henüz desteklenmez. Tool workflow'ları için `prompt()` / `asText()` / `response()` kullan. Tool ile `stream()` çağırmak upstream stream açılmadan fail eder.
+
+### Tool tanımla
+
+```php
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
+use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Tools\Request;
+
+final class LookupOrder implements Tool
+{
+    public function name(): string
+    {
+        return 'lookup_order';
+    }
+
+    public function description(): string
+    {
+        return 'Order ID ile sipariş toplamını bulur.';
+    }
+
+    public function handle(Request $request): string
+    {
+        $orderId = $request['order_id'];
+
+        // Buraya kendi application lookup logic'ini koy.
+        return "{$orderId} sipariş toplamı 42 TRY";
+    }
+
+    /** @return array<string, Type> */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'order_id' => $schema->string()->required(),
+        ];
+    }
+}
+```
+
+`name()` metodu `Tool` contract içinde zorunlu değildir ama tavsiye edilir. Eksik olursa Laravel AI tool adını class basename üzerinden üretir.
+
+### `ai()` helper ile tool kullanımı
+
+```php
+$response = ai()
+    ->using('laravel-ai-router', 'auto')
+    ->instructions('Sipariş sorularını cevaplamak için gerektiğinde tool kullan.')
+    ->withTools([new LookupOrder])
+    ->prompt('A-100 siparişinin toplamı nedir?')
+    ->response();
+
+echo (string) $response;
+// "A-100 siparişinin toplamı 42 TRY."
+
+$response->toolCalls;   // ToolCall objelerinden oluşan Collection
+$response->toolResults; // ToolResult objelerinden oluşan Collection
+$response->steps;       // Tool loop iterasyonları dahil Step Collection
+```
+
+### Named agent ile tool kullanımı
+
+```php
+use Laravel\Ai\Attributes\Model;
+use Laravel\Ai\Attributes\Provider;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Promptable;
+
+#[Provider('laravel-ai-router')]
+#[Model('auto')]
+final class OrderAgent implements Agent, HasTools
+{
+    use Promptable;
+
+    public function instructions(): string
+    {
+        return 'Sipariş sorularını cevaplamak için gerektiğinde tool kullan.';
+    }
+
+    /** @return iterable<int, Tool> */
+    public function tools(): iterable
+    {
+        return [new LookupOrder];
+    }
+}
+```
+
+```php
+$response = OrderAgent::make()->prompt('A-100 siparişinin toplamı nedir?');
+
+echo (string) $response;
+```
+
+## Streaming Kullanımı
+
+Laravel AI Router, Laravel AI stream eventleri üzerinden text streaming destekler:
+
+```php
+use Laravel\Ai\Streaming\Events\TextDelta;
+
+$stream = ai()
+    ->using('laravel-ai-router', 'auto')
+    ->instructions('Kısa bir streaming cevap ver.')
+    ->prompt('Mevcut sipariş durumunu açıkla.')
+    ->stream();
+
+foreach ($stream as $event) {
+    if ($event instanceof TextDelta) {
+        echo $event->delta;
+    }
+}
+```
+
+Aynı davranış named agent üzerinden de kullanılabilir:
+
+```php
+$stream = SupportAgent::make()->stream(
+    'Mevcut sipariş durumunu açıkla.',
+    provider: 'laravel-ai-router',
+    model: 'auto',
+);
+```
+
+## Structured Output Kullanımı
+
+Laravel AI Router, non-streaming text request'lerde Laravel AI structured output destekler. Paket upstream'e JSON-mode benzeri seçenekler gönderir ve geçerli JSON content'i Laravel AI structured response objelerine map eder.
+
+```php
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
+use Laravel\Ai\Attributes\Model;
+use Laravel\Ai\Attributes\Provider;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasStructuredOutput;
+use Laravel\Ai\Promptable;
+
+#[Provider('laravel-ai-router')]
+#[Model('auto')]
+final class TicketAnalyzer implements Agent, HasStructuredOutput
+{
+    use Promptable;
+
+    public function instructions(): string
+    {
+        return 'İstenen ticket analizi için JSON response döndür.';
+    }
+
+    /** @return array<string, Type> */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'summary' => $schema->string()->required(),
+            'priority' => $schema->integer()->required(),
+        ];
+    }
+}
+```
+
+```php
+$response = TicketAnalyzer::make()->prompt(
+    'Bu ticketı analiz et.',
+    provider: 'laravel-ai-router',
+    model: 'auto',
+);
+
+$response['summary'];  // "..."
+$response['priority']; // 3
+$response->usage;
+$response->meta;
+```
 
 ## Laravel AI SDK Capability Matrix
 

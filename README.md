@@ -37,6 +37,7 @@ Free-tier and anonymous providers can change limits, model availability, authent
 ## Features
 
 - Laravel AI driver name: `laravel-ai-router`.
+- Global `ai()` helper with `using(...)->prompt(...)->asText()` convenience flow for Tinker and small call sites.
 - Default text model: `auto`.
 - Provider API key management: add, list, enable, disable, remove.
 - Runtime custom OpenAI-compatible provider definitions: add, list, enable, disable, remove.
@@ -246,18 +247,77 @@ $modelIds = $provider->models('openrouter', 'Primary');
 
 ## Prompt Usage
 
-Use `auto` to let Laravel AI Router route the request to an eligible provider key and fallback-enabled cached model:
+Before sending prompts, run the install/setup flow and add at least one enabled provider key:
+
+```bash
+php artisan laravel-ai-router:install
+php artisan laravel-ai-router:provider:add
+```
+
+Laravel AI Router can be called in two ways:
+
+1. The package convenience helper: `ai()->using(...)->prompt(...)->asText()`.
+2. Native Laravel AI agents: classes that implement `Laravel\Ai\Contracts\Agent` and use `Laravel\Ai\Promptable`.
+
+### Quick Tinker usage with the `ai()` helper
+
+The package ships a global `ai()` helper for Tinker and small application call sites. It returns Laravel AI Router's convenience helper, not Laravel AI SDK's facade.
+
+```bash
+php artisan tinker
+```
 
 ```php
-$response = ai()
+ai()
     ->using('laravel-ai-router', 'auto')
+    ->instructions('Answer concisely and include operationally relevant details.')
     ->prompt('Summarize this ticket in three bullet points.')
     ->asText();
 ```
 
-Exact model IDs returned by `LaravelAiRouterProvider::models()` can be routed directly even when their auto-fallback row is disabled, which is the default for newly discovered built-in live models including NVIDIA's free credit-backed catalog.
+`auto` lets Laravel AI Router choose an eligible provider key and fallback-enabled cached model. You can also route an exact cached model ID:
 
-Agent attribute usage:
+```php
+ai()
+    ->using('laravel-ai-router', 'qwen/qwen3-coder:free')
+    ->prompt('Write a short release note.')
+    ->asText();
+```
+
+When you need the full Laravel AI response instead of only text, call `response()`:
+
+```php
+$response = ai()
+    ->using('laravel-ai-router', 'auto')
+    ->timeout(20)
+    ->prompt('Summarize the order status.')
+    ->response();
+
+(string) $response;              // response text
+$response->usage->promptTokens;  // input token count
+$response->usage->completionTokens;
+$response->meta->provider;       // "laravel-ai-router"
+$response->meta->model;          // routed upstream model ID
+```
+
+The helper also exposes the underlying Laravel AI manager when you need low-level SDK access:
+
+```php
+use Ferdiunal\LaravelAiRouter\LaravelAiRouterProvider;
+
+$provider = ai()->manager()->textProvider('laravel-ai-router');
+
+assert($provider instanceof LaravelAiRouterProvider);
+
+$models = $provider->models('openrouter', 'Primary');
+// ['auto', 'paid/model', 'qwen/qwen3-coder:free', ...]
+```
+
+Unknown method calls on `ai()` are proxied to the underlying `Laravel\Ai\AiManager`, so `ai()->textProvider('laravel-ai-router')` also works.
+
+### Native Laravel AI agent usage
+
+For production code, a named agent class is usually easier to test and reuse:
 
 ```php
 use Laravel\Ai\Attributes\Model;
@@ -278,6 +338,23 @@ final class SupportAgent implements Agent
 }
 ```
 
+```php
+$response = SupportAgent::make()->prompt('Summarize the order status.');
+
+echo (string) $response;
+```
+
+You can still override provider/model per call:
+
+```php
+$response = SupportAgent::make()->prompt(
+    'Summarize the order status.',
+    provider: 'laravel-ai-router',
+    model: 'qwen/qwen3-coder:free',
+    timeout: 20,
+);
+```
+
 Failover usage through Laravel AI provider arrays:
 
 ```php
@@ -292,6 +369,183 @@ $response = SupportAgent::make()->prompt(
 ```
 
 Retryable rate-limit, temporary overload, timeout, and insufficient-credit conditions are mapped to Laravel AI failover-compatible exception types where applicable.
+
+## Function Tools
+
+Laravel AI Router supports non-streaming OpenAI-compatible tool calls. Tools are regular Laravel AI `Tool` classes; the router maps their schema to OpenAI-compatible `tools`, executes requested calls locally, and sends tool result messages back to the selected provider.
+
+> Streaming tool calls are intentionally not supported yet. Use `prompt()` / `asText()` / `response()` for tool workflows. Calling `stream()` with tools fails before opening the upstream stream.
+
+### Define a tool
+
+```php
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
+use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Tools\Request;
+
+final class LookupOrder implements Tool
+{
+    public function name(): string
+    {
+        return 'lookup_order';
+    }
+
+    public function description(): string
+    {
+        return 'Look up an order total by order ID.';
+    }
+
+    public function handle(Request $request): string
+    {
+        $orderId = $request['order_id'];
+
+        // Replace this with your application lookup.
+        return "Order {$orderId} total is 42 TRY";
+    }
+
+    /** @return array<string, Type> */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'order_id' => $schema->string()->required(),
+        ];
+    }
+}
+```
+
+`name()` is optional in the `Tool` contract, but recommended. If it is missing, Laravel AI derives the tool name from the class basename.
+
+### Use tools with the `ai()` helper
+
+```php
+$response = ai()
+    ->using('laravel-ai-router', 'auto')
+    ->instructions('Use tools when needed to answer order-related questions.')
+    ->withTools([new LookupOrder])
+    ->prompt('What is the total for order A-100?')
+    ->response();
+
+echo (string) $response;
+// "The total for order A-100 is 42 TRY."
+
+$response->toolCalls;   // Collection of ToolCall objects
+$response->toolResults; // Collection of ToolResult objects
+$response->steps;       // Collection of Step objects, including tool loop iterations
+```
+
+### Use tools with a named agent
+
+```php
+use Laravel\Ai\Attributes\Model;
+use Laravel\Ai\Attributes\Provider;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Promptable;
+
+#[Provider('laravel-ai-router')]
+#[Model('auto')]
+final class OrderAgent implements Agent, HasTools
+{
+    use Promptable;
+
+    public function instructions(): string
+    {
+        return 'Use tools when needed to answer order-related questions.';
+    }
+
+    /** @return iterable<int, Tool> */
+    public function tools(): iterable
+    {
+        return [new LookupOrder];
+    }
+}
+```
+
+```php
+$response = OrderAgent::make()->prompt('What is the total for order A-100?');
+
+echo (string) $response;
+```
+
+## Streaming Usage
+
+Laravel AI Router supports text streaming through Laravel AI stream events:
+
+```php
+use Laravel\Ai\Streaming\Events\TextDelta;
+
+$stream = ai()
+    ->using('laravel-ai-router', 'auto')
+    ->instructions('Answer with a short streaming response.')
+    ->prompt('Explain the current order status.')
+    ->stream();
+
+foreach ($stream as $event) {
+    if ($event instanceof TextDelta) {
+        echo $event->delta;
+    }
+}
+```
+
+The same behavior is available through named agents:
+
+```php
+$stream = SupportAgent::make()->stream(
+    'Explain the current order status.',
+    provider: 'laravel-ai-router',
+    model: 'auto',
+);
+```
+
+## Structured Output Usage
+
+Laravel AI Router supports Laravel AI structured output for non-streaming text requests. The package sends JSON-mode style options upstream and maps valid JSON content back into Laravel AI structured response objects.
+
+```php
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
+use Laravel\Ai\Attributes\Model;
+use Laravel\Ai\Attributes\Provider;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasStructuredOutput;
+use Laravel\Ai\Promptable;
+
+#[Provider('laravel-ai-router')]
+#[Model('auto')]
+final class TicketAnalyzer implements Agent, HasStructuredOutput
+{
+    use Promptable;
+
+    public function instructions(): string
+    {
+        return 'Return a JSON response with the requested ticket analysis.';
+    }
+
+    /** @return array<string, Type> */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'summary' => $schema->string()->required(),
+            'priority' => $schema->integer()->required(),
+        ];
+    }
+}
+```
+
+```php
+$response = TicketAnalyzer::make()->prompt(
+    'Analyze this ticket.',
+    provider: 'laravel-ai-router',
+    model: 'auto',
+);
+
+$response['summary'];  // "..."
+$response['priority']; // 3
+$response->usage;
+$response->meta;
+```
 
 ## Laravel AI SDK Capability Matrix
 

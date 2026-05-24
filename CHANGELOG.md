@@ -2,6 +2,20 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.3.0 - 2026-05-24
+
+### Summary
+
+- Added a global `ai()` convenience helper with `using(...)->prompt(...)->asText()`, `response()`, `stream()`, and tool attachment support for Tinker and small call sites.
+- Added detailed English and Turkish README usage examples for the helper, native Laravel AI agents, non-streaming function tools, streaming, and structured output.
+- Preserved native Laravel AI SDK access through `ai()->manager()` and method proxying on the helper wrapper.
+
+### Validation
+
+- `composer validate --strict` — valid.
+- `composer ci` — 134 passed, 1 skipped, 447 assertions.
+- `git diff --check` — clean.
+
 ## v0.2.1 - 2026-05-24
 
 ### Summary
@@ -29,13 +43,6 @@ All notable changes to `laravel-ai-router` will be documented in this file.
 - Local `composer validate --strict`
 - Local `composer ci`: 131 passed, 1 skipped, 438 assertions
 - GitHub Actions Tests matrix on `main`: Ubuntu/Windows x prefer-stable/prefer-lowest passed
-
-## Unreleased
-
-### Changed
-
-- Generalized live `/models` cache exposure for routable OpenAI-compatible providers: non-`:free` model IDs are cached as available credits-based rows, routeable by exact model ID, and excluded from default `auto` fallback unless explicitly eligible.
-- Added opt-in NVIDIA live model discovery smoke coverage guarded by `LARAVEL_AI_ROUTER_LIVE_NVIDIA_MODELS` and `NVIDIA_API_KEY`/`NVAPI_API_KEY`.
 
 ## v0.1.2 - 2026-05-23
 

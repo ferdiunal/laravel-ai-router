@@ -2,6 +2,19 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.2.1 - 2026-05-24
+
+### Summary
+
+- Classify NVIDIA live `/models` entries as free credit-backed choices in provider model cache/listing output.
+- Preserve safe auto-routing behavior: newly discovered built-in NVIDIA live models stay out of `auto` fallback unless curated or explicitly allowed by provider policy.
+- Add regression coverage for NVIDIA cache metadata, exact model routing, auto fallback safety, and opt-in live smoke documentation.
+
+### Validation
+
+- `composer ci` — 132 passed, 1 skipped, 443 assertions.
+- `git diff --check` — clean.
+
 ## v0.2.0 - 2026-05-23
 
 ### Changed

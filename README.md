@@ -113,6 +113,15 @@ return [
         ],
         'cache_ttl_minutes' => env('LARAVEL_AI_ROUTER_MODELS_CACHE_TTL', 1440),
     ],
+
+    'routing' => [
+        // priority keeps the fallback order deterministic. balanced_random shuffles only
+        // the top fallback rows by effective priority; normal key, cache, and limit checks
+        // still decide whether a shuffled candidate is usable.
+        'auto_strategy' => env('LARAVEL_AI_ROUTER_AUTO_STRATEGY', 'priority'),
+        'random_pool_size' => env('LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE', 5),
+        'random_priority_window' => env('LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW', 3),
+    ],
 ];
 ```
 
@@ -275,7 +284,9 @@ ai()
     ->asText();
 ```
 
-`auto` lets Laravel AI Router choose an eligible provider key and fallback-enabled cached model. You can also route an exact cached model ID:
+`auto` lets Laravel AI Router choose an eligible provider key and fallback-enabled cached model. By default the auto chain remains priority-based (`routing.auto_strategy=priority`). Set `LARAVEL_AI_ROUTER_AUTO_STRATEGY=balanced_random` to shuffle only the configured top fallback pool (`LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE`, bounded by `LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW`) while still enforcing disabled/invalid-key skips, model-cache compatibility, cooldowns, and rate/token-limit checks. Exact model calls still route only that requested model ID by default.
+
+You can also route an exact cached model ID:
 
 ```php
 ai()
@@ -556,7 +567,7 @@ $response->meta;
 | Structured output | Supported | Sends JSON-mode style options and maps valid JSON content into Laravel AI structured response types. |
 | Function tools | Supported for non-streaming | Executes OpenAI-compatible `tools` / `tool_calls` loops and sends tool result messages back to the provider. |
 | Streaming tools | Not supported | Fails before opening the upstream stream with a clear `LogicException`. |
-| Failover | Supported | Retries eligible internal provider keys up to `routing.max_attempts`, then maps rate limits, insufficient credit/quota, timeout, and overload errors to Laravel AI failover exception types. |
+| Failover | Supported | Retries eligible internal provider keys up to `routing.max_attempts`, then maps rate limits, insufficient credit/quota, timeout, and overload errors to Laravel AI failover exception types. `auto` defaults to priority ordering and can opt into `balanced_random` top-pool shuffling without broadening the eligible model set. |
 | Images, audio, transcription, embeddings, reranking, files, stores | Not supported | The package advertises only the text provider contract and throws explicit capability errors for unsupported methods. |
 
 ## Usage Analytics

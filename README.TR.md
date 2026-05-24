@@ -113,6 +113,15 @@ return [
         ],
         'cache_ttl_minutes' => env('LARAVEL_AI_ROUTER_MODELS_CACHE_TTL', 1440),
     ],
+
+    'routing' => [
+        // priority deterministic fallback sırasını korur. balanced_random ise yalnızca
+        // effective priority değerine göre üst fallback satırlarını karıştırır; normal key,
+        // cache ve limit kontrolleri adayın kullanılabilirliğini yine belirler.
+        'auto_strategy' => env('LARAVEL_AI_ROUTER_AUTO_STRATEGY', 'priority'),
+        'random_pool_size' => env('LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE', 5),
+        'random_priority_window' => env('LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW', 3),
+    ],
 ];
 ```
 
@@ -275,7 +284,9 @@ ai()
     ->asText();
 ```
 
-`auto`, Laravel AI Router'ın uygun provider key ve fallback-enabled cached model seçmesini sağlar. Cached exact model ID ile de route edebilirsin:
+`auto`, Laravel AI Router'ın uygun provider key ve fallback-enabled cached model seçmesini sağlar. Varsayılan auto zinciri priority tabanlı kalır (`routing.auto_strategy=priority`). `LARAVEL_AI_ROUTER_AUTO_STRATEGY=balanced_random` ayarı, sadece configured üst fallback havuzunu (`LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE`, `LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW` sınırıyla) karıştırır; disabled/invalid key skip, model-cache uyumluluğu, cooldown ve rate/token-limit kontrolleri yine uygulanır. Exact model çağrıları varsayılan olarak yalnızca istenen model ID içinde route edilir.
+
+Cached exact model ID ile de route edebilirsin:
 
 ```php
 ai()
@@ -556,7 +567,7 @@ $response->meta;
 | Structured output | Desteklenir | JSON-mode benzeri seçenekleri gönderir ve geçerli JSON içeriğini Laravel AI structured response tiplerine map eder. |
 | Function tools | Non-stream desteklenir | OpenAI-compatible `tools` / `tool_calls` loop'unu çalıştırır ve tool result mesajlarını provider'a geri gönderir. |
 | Streaming tools | Desteklenmez | Upstream stream açılmadan açık bir `LogicException` ile fail eder. |
-| Failover | Desteklenir | Uygun internal provider key kayıtlarını `routing.max_attempts` sınırına kadar dener; ardından rate limit, insufficient credit/quota, timeout ve overload hatalarını Laravel AI failover exception tiplerine map eder. |
+| Failover | Desteklenir | Uygun internal provider key kayıtlarını `routing.max_attempts` sınırına kadar dener; ardından rate limit, insufficient credit/quota, timeout ve overload hatalarını Laravel AI failover exception tiplerine map eder. `auto` varsayılan olarak priority sırasını kullanır; `balanced_random` opt-in üst havuz karıştırması eligible model setini genişletmez. |
 | Images, audio, transcription, embeddings, reranking, files, stores | Desteklenmez | Paket yalnızca text provider contract advertise eder ve unsupported methodlar için açık capability hatası fırlatır. |
 
 ## Usage Analytics

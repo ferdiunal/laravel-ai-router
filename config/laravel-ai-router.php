@@ -13,6 +13,10 @@ return [
     ],
 
     'routing' => [
+        'auto_strategy' => env('LARAVEL_AI_ROUTER_AUTO_STRATEGY', 'priority'),
+        'random_pool_size' => env('LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE', 5),
+        'random_priority_window' => env('LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW', 3),
+        'random_seed' => env('LARAVEL_AI_ROUTER_RANDOM_SEED'),
         'max_attempts' => env('LARAVEL_AI_ROUTER_MAX_ATTEMPTS', 20),
         'cooldown_seconds' => env('LARAVEL_AI_ROUTER_COOLDOWN_SECONDS', 120),
         'penalty_per_retryable_failure' => env('LARAVEL_AI_ROUTER_PENALTY_PER_FAILURE', 3),

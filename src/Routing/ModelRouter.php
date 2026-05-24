@@ -23,6 +23,7 @@ final class ModelRouter
     public function __construct(
         private readonly ProviderAdapterRegistry $adapters,
         private readonly RateLimitWindowRepository $rateLimits,
+        private readonly RouteCandidateSelector $candidateSelector,
     ) {}
 
     /**
@@ -60,11 +61,9 @@ final class ModelRouter
 
         $fallbacks = LaravelAiRouterFallback::query()
             ->where('enabled', true)
-            ->orderByRaw('(priority + penalty) asc')
-            ->orderBy('id')
             ->get();
 
-        foreach ($fallbacks as $fallback) {
+        foreach ($this->candidateSelector->orderedFallbacks($fallbacks) as $fallback) {
             $model = LaravelAiRouterModel::query()
                 ->whereKey($fallback->laravel_ai_router_model_id)
                 ->where('enabled', true)

@@ -137,6 +137,10 @@ final class ProviderCatalog
                         'headers' => $definition->headers ?? [],
                         'timeout_ms' => $definition->timeout_ms,
                         'requires_placeholder_key' => $definition->requires_placeholder_key,
+                        'declared_models' => $definition->declared_models ?? [],
+                        'models_endpoint_enabled' => $definition->models_endpoint_enabled ?? true,
+                        'validation_method' => $definition->validation_method ?? 'models',
+                        'validation_model' => $definition->validation_model,
                     ]);
 
                     return $normalized === null ? [] : [$definition->platform => $normalized];
@@ -164,6 +168,10 @@ final class ProviderCatalog
             'base_url' => $baseUrl,
             'timeout_ms' => $timeoutMs,
             'requires_placeholder_key' => $requiresPlaceholderKey,
+            'declared_models' => [],
+            'models_endpoint_enabled' => true,
+            'validation_method' => 'models',
+            'validation_model' => null,
             'custom' => false,
         ];
     }

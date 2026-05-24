@@ -82,6 +82,42 @@ it('does not let extra headers override the provider bearer token', function () 
     });
 });
 
+it('validates keys through chat completions when models endpoint validation is disabled', function () {
+    Http::fake([
+        'https://api.example.com/v1/chat/completions' => Http::response([
+            'id' => 'chatcmpl_validate',
+            'object' => 'chat.completion',
+            'created' => 1,
+            'model' => 'mimo-v2.5-pro',
+            'choices' => [[
+                'index' => 0,
+                'message' => ['role' => 'assistant', 'content' => 'ok'],
+                'finish_reason' => 'stop',
+            ]],
+        ]),
+        'https://api.example.com/v1/models' => Http::response(['error' => ['message' => 'models unavailable']], 404),
+    ]);
+
+    $adapter = new OpenAiCompatibleAdapter(
+        platform: 'example',
+        name: 'Example',
+        baseUrl: 'https://api.example.com/v1',
+        validationMethod: 'chat',
+        validationModel: 'mimo-v2.5-pro',
+    );
+
+    expect($adapter->validateKey('provider-key'))->toBeTrue();
+
+    Http::assertSent(function (Request $request): bool {
+        return $request->url() === 'https://api.example.com/v1/chat/completions'
+            && $request->hasHeader('Authorization', 'Bearer provider-key')
+            && $request['model'] === 'mimo-v2.5-pro'
+            && $request['messages'][0]['content'] === 'ping'
+            && $request['max_tokens'] === 1;
+    });
+    Http::assertNotSent(fn (Request $request): bool => $request->url() === 'https://api.example.com/v1/models');
+});
+
 it('rejects unsafe custom validation URLs before validating keys', function () {
     Http::fake();
 

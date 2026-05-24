@@ -32,6 +32,8 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         private readonly bool $enforcePublicBaseUrl = false,
         private readonly ?string $validateUrl = null,
         private readonly int $timeoutMs = 15_000,
+        private readonly string $validationMethod = 'models',
+        private readonly ?string $validationModel = null,
         private readonly int $maxStreamLineBytes = 65_536,
         private readonly int $maxStreamEventBytes = 1_048_576,
     ) {}
@@ -130,6 +132,10 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
      */
     public function validateKey(string $apiKey): bool
     {
+        if ($this->validationMethod === 'chat') {
+            return $this->validateKeyWithChat($apiKey);
+        }
+
         $url = $this->validationEndpoint();
 
         $response = Http::timeout(10)
@@ -139,6 +145,40 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
             ->get($url);
 
         return ! in_array($response->status(), [401, 403], true);
+    }
+
+    /**
+     * Validate provider credentials by sending a minimal non-streaming chat completion probe.
+     */
+    private function validateKeyWithChat(string $apiKey): bool
+    {
+        $modelId = trim((string) $this->validationModel);
+        if ($modelId === '') {
+            throw new RuntimeException("Provider [{$this->platform}] chat validation requires a validation model.");
+        }
+
+        $url = $this->endpoint('chat/completions');
+
+        $response = Http::timeout(10)
+            ->withHeaders($this->safeExtraHeaders())
+            ->withToken($apiKey)
+            ->withOptions($this->requestOptions($url))
+            ->acceptJson()
+            ->post($url, [
+                'model' => $modelId,
+                'messages' => [['role' => 'user', 'content' => 'ping']],
+                'max_tokens' => 1,
+            ]);
+
+        if (in_array($response->status(), [401, 403], true)) {
+            return false;
+        }
+
+        if (! $response->successful()) {
+            $this->throwIfUnsuccessful($response, 'chat validation API error');
+        }
+
+        return true;
     }
 
     /**

@@ -8,9 +8,11 @@ use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterModel;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderDefinition;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderModelCache;
+use Ferdiunal\LaravelAiRouter\Routing\ModelRouter;
 use Ferdiunal\LaravelAiRouter\Services\ProviderDefinitionManager;
 use Ferdiunal\LaravelAiRouter\Services\ProviderKeyManager;
 use Ferdiunal\LaravelAiRouter\Services\ProviderModelCacheService;
+use Ferdiunal\LaravelAiRouter\Services\ProviderModelSelectionManager;
 use Ferdiunal\LaravelAiRouter\Tests\TestCase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -40,6 +42,36 @@ it('runs the prompt-driven custom provider definition add command without option
             'adapter' => 'openai-compatible',
             'base_url' => 'https://example.com/custom/v1',
         ]);
+});
+
+it('updates declared model settings on existing custom provider definitions through a command', function () {
+    /** @var TestCase $this */
+    migrateLaravelAiRouterForCustomProviderTests();
+
+    $definition = app(ProviderDefinitionManager::class)->addOpenAiCompatible(
+        platform: 'models-command-openai',
+        name: 'Models Command OpenAI',
+        baseUrl: 'https://example.com/models-command/v1',
+    );
+
+    $this->artisan('laravel-ai-router:provider-definition:models', [
+        '--id' => $definition->getKey(),
+        '--models' => 'mimo-v2.5-pro,other-model',
+        '--models-endpoint' => 'disabled',
+        '--validation-method' => 'chat',
+        '--validation-model' => 'mimo-v2.5-pro',
+        '--no-interaction' => true,
+    ])
+        ->expectsOutputToContain('Updated models-command-openai')
+        ->assertSuccessful();
+
+    $definition->refresh();
+
+    expect($definition->models_endpoint_enabled)->toBeFalse()
+        ->and($definition->validation_method)->toBe('chat')
+        ->and($definition->validation_model)->toBe('mimo-v2.5-pro')
+        ->and(collect($definition->declared_models)->pluck('model_id')->all())->toBe(['mimo-v2.5-pro', 'other-model'])
+        ->and(ProviderCatalog::get('models-command-openai')['declared_models'][0]['model_id'])->toBe('mimo-v2.5-pro');
 });
 
 it('routes prompts through config-defined custom OpenAI-compatible providers', function () {
@@ -151,6 +183,163 @@ it('adds runtime custom OpenAI-compatible providers and caches their routable av
         ->where('laravel_ai_router_model_id', $paidModel->getKey())
         ->value('enabled'))->toBeTrue();
 });
+
+it('caches declared custom provider models when the models endpoint is disabled', function () {
+    migrateLaravelAiRouterForCustomProviderTests();
+
+    app(ProviderDefinitionManager::class)->addOpenAiCompatible(
+        platform: 'opengateway-test',
+        name: 'OpenGateway Test',
+        baseUrl: 'https://example.com/gateway/v1',
+        modelsEndpointEnabled: false,
+        validationMethod: 'chat',
+        validationModel: 'mimo-v2.5-pro',
+        declaredModels: [[
+            'id' => 'mimo-v2.5-pro',
+            'name' => 'MIMO v2.5 Pro',
+            'budget_label' => 'credits-based',
+            'supports_tools' => null,
+            'auto_enabled' => true,
+        ]],
+    );
+
+    Http::fake([
+        'https://example.com/gateway/v1/models' => Http::response(['error' => ['message' => 'models unavailable']], 404),
+    ]);
+
+    $key = app(ProviderKeyManager::class)->add('opengateway-test', 'key-opengateway-value-123456', 'Gateway', refreshModels: true);
+    $cachedModel = LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->firstOrFail();
+
+    expect($cachedModel->model_id)->toBe('mimo-v2.5-pro')
+        ->and($cachedModel->source)->toBe('definition')
+        ->and($cachedModel->auto_enabled)->toBeTrue()
+        ->and(LaravelAiRouterModel::query()->where('platform', 'opengateway-test')->where('model_id', 'mimo-v2.5-pro')->exists())->toBeTrue()
+        ->and(LaravelAiRouterFallback::query()->whereIn('laravel_ai_router_model_id', LaravelAiRouterModel::query()->where('platform', 'opengateway-test')->pluck('id'))->where('enabled', true)->exists())->toBeTrue()
+        ->and(app(ProviderModelCacheService::class)->modelIds('opengateway-test', 'Gateway', includeAuto: false))->toBe(['mimo-v2.5-pro']);
+
+    Http::assertNotSent(fn (Request $request): bool => $request->url() === 'https://example.com/gateway/v1/models');
+});
+
+it('does not auto select declared models when auto enabled is the string false', function () {
+    migrateLaravelAiRouterForCustomProviderTests();
+
+    app(ProviderDefinitionManager::class)->addOpenAiCompatible(
+        platform: 'string-false-opengateway',
+        name: 'String False OpenGateway',
+        baseUrl: 'https://example.com/gateway/v1',
+        modelsEndpointEnabled: false,
+        validationMethod: 'chat',
+        validationModel: 'mimo-v2.5-pro',
+        declaredModels: [[
+            'model_id' => 'mimo-v2.5-pro',
+            'display_name' => 'MIMO v2.5 Pro',
+            'auto_enabled' => 'false',
+        ]],
+    );
+
+    $key = app(ProviderKeyManager::class)->add('string-false-opengateway', 'key-string-false-value-123456', 'Gateway', refreshModels: true);
+
+    expect(app(ProviderModelSelectionManager::class)->selectedModelIdsForKey($key))->toBe([]);
+});
+
+it('routes operator-selected declared models and preserves selection across refresh', function () {
+    migrateLaravelAiRouterForCustomProviderTests();
+
+    app(ProviderDefinitionManager::class)->addOpenAiCompatible(
+        platform: 'operator-opengateway',
+        name: 'Operator OpenGateway',
+        baseUrl: 'https://example.com/gateway/v1',
+        modelsEndpointEnabled: false,
+        validationMethod: 'chat',
+        validationModel: 'mimo-v2.5-pro',
+        declaredModels: [[
+            'model_id' => 'mimo-v2.5-pro',
+            'display_name' => 'MIMO v2.5 Pro',
+            'auto_enabled' => false,
+        ]],
+    );
+
+    $key = app(ProviderKeyManager::class)->add('operator-opengateway', 'key-operator-opengateway-value-123456', 'Gateway', refreshModels: true);
+
+    app(ProviderModelSelectionManager::class)->setSelectedModelIdsForKey($key, ['mimo-v2.5-pro']);
+
+    config()->set('laravel-ai-router.routing.auto_strategy', 'random_provider');
+
+    $route = app(ModelRouter::class)->route('auto');
+
+    app(ProviderModelCacheService::class)->refreshForKey($key->refresh());
+
+    expect($route->modelId)->toBe('mimo-v2.5-pro')
+        ->and($route->platform)->toBe('operator-opengateway')
+        ->and(app(ProviderModelSelectionManager::class)->selectedModelIdsForKey($key->refresh()))->toBe(['mimo-v2.5-pro']);
+});
+
+it('routes exact requests through declared custom provider models without using the models endpoint', function () {
+    migrateLaravelAiRouterForCustomProviderTests();
+
+    app(ProviderDefinitionManager::class)->addOpenAiCompatible(
+        platform: 'exact-opengateway',
+        name: 'Exact OpenGateway',
+        baseUrl: 'https://example.com/gateway/v1',
+        modelsEndpointEnabled: false,
+        validationMethod: 'chat',
+        validationModel: 'mimo-v2.5-pro',
+        declaredModels: [[
+            'model_id' => 'mimo-v2.5-pro',
+            'display_name' => 'MIMO v2.5 Pro',
+            'budget_label' => 'credits-based',
+            'auto_enabled' => true,
+        ]],
+    );
+
+    Http::fake([
+        'https://example.com/gateway/v1/chat/completions' => Http::response([
+            'id' => 'chatcmpl_declared_1',
+            'object' => 'chat.completion',
+            'created' => 1,
+            'model' => 'mimo-v2.5-pro',
+            'choices' => [[
+                'index' => 0,
+                'message' => ['role' => 'assistant', 'content' => 'Declared çalışıyor'],
+                'finish_reason' => 'stop',
+            ]],
+        ]),
+    ]);
+
+    app(ProviderKeyManager::class)->add('exact-opengateway', 'key-exact-opengateway-value-123456', 'Gateway', refreshModels: true);
+
+    $agent = new class implements Agent
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'Return a short Turkish answer.';
+        }
+    };
+
+    $response = $agent->prompt('ping', provider: 'laravel-ai-router', model: 'mimo-v2.5-pro');
+
+    expect((string) $response)->toBe('Declared çalışıyor');
+
+    Http::assertSent(function (Request $request): bool {
+        return $request->url() === 'https://example.com/gateway/v1/chat/completions'
+            && $request->hasHeader('Authorization', 'Bearer key-exact-opengateway-value-123456')
+            && $request['model'] === 'mimo-v2.5-pro';
+    });
+
+    Http::assertNotSent(fn (Request $request): bool => $request->url() === 'https://example.com/gateway/v1/models');
+});
+
+it('rejects final OpenAI-compatible endpoint URLs in custom provider definitions', function () {
+    migrateLaravelAiRouterForCustomProviderTests();
+
+    app(ProviderDefinitionManager::class)->addOpenAiCompatible(
+        platform: 'endpoint-openai',
+        name: 'Endpoint OpenAI Proxy',
+        baseUrl: 'https://example.com/gateway/v1/chat/completions',
+    );
+})->throws(ValidationException::class, 'base URL must point to the API root');
 
 it('rejects unsafe or colliding custom provider definitions', function (string $platform, string $baseUrl, string $field) {
     migrateLaravelAiRouterForCustomProviderTests();

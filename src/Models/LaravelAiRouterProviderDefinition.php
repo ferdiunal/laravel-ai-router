@@ -17,6 +17,10 @@ use Illuminate\Support\Carbon;
  * @property array<string, string>|null $headers
  * @property int $timeout_ms
  * @property bool $requires_placeholder_key
+ * @property array<int, array<string, mixed>>|null $declared_models
+ * @property bool $models_endpoint_enabled
+ * @property string $validation_method
+ * @property string|null $validation_model
  * @property bool $enabled
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -36,6 +40,8 @@ final class LaravelAiRouterProviderDefinition extends LaravelAiRouterBaseModel
             'headers' => 'array',
             'timeout_ms' => 'int',
             'requires_placeholder_key' => 'bool',
+            'declared_models' => 'array',
+            'models_endpoint_enabled' => 'bool',
             'enabled' => 'bool',
         ];
     }

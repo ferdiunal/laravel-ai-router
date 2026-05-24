@@ -23,6 +23,7 @@ final class ProviderDefinitionManager
      * Validate and persist a runtime OpenAI-compatible provider definition.
      *
      * @param  array<string, mixed>  $headers
+     * @param  array<int, mixed>  $declaredModels
      */
     public function addOpenAiCompatible(
         string $platform,
@@ -31,11 +32,18 @@ final class ProviderDefinitionManager
         array $headers = [],
         int $timeoutMs = 15_000,
         bool $requiresPlaceholderKey = false,
+        bool $modelsEndpointEnabled = true,
+        string $validationMethod = 'models',
+        ?string $validationModel = null,
+        array $declaredModels = [],
     ): LaravelAiRouterProviderDefinition {
         $platform = trim($platform);
         $name = trim($name);
 
         $errors = [];
+        if (! $modelsEndpointEnabled && $validationMethod === 'models') {
+            $validationMethod = 'chat';
+        }
 
         if (($error = ProviderDefinitionValidator::platformError($platform)) !== null) {
             $errors['platform'] = $error;
@@ -51,6 +59,21 @@ final class ProviderDefinitionManager
 
         if (($error = ProviderDefinitionValidator::headersError($headers)) !== null) {
             $errors['headers'] = $error;
+        }
+
+        $normalizedDeclaredModels = ProviderDefinitionValidator::normalizeDeclaredModels($declaredModels);
+        if ($normalizedDeclaredModels === null) {
+            $errors['declared_models'] = 'Declared models must be a list of model IDs or model metadata objects with a non-empty id/model_id.';
+        }
+
+        $normalizedValidationMethod = ProviderDefinitionValidator::normalizeValidationMethod($validationMethod);
+        if ($normalizedValidationMethod === null) {
+            $errors['validation_method'] = 'Validation method must be either models or chat.';
+        }
+
+        $validationModel = trim((string) $validationModel);
+        if ($normalizedValidationMethod === 'chat' && $validationModel === '' && ($normalizedDeclaredModels ?? []) === []) {
+            $errors['validation_model'] = 'Validation model is required when chat validation is enabled and no declared models exist.';
         }
 
         if (array_key_exists($platform, ProviderCatalog::builtIn())) {
@@ -75,6 +98,10 @@ final class ProviderDefinitionManager
             'headers' => $headers,
             'timeout_ms' => $timeoutMs,
             'requires_placeholder_key' => $requiresPlaceholderKey,
+            'models_endpoint_enabled' => $modelsEndpointEnabled,
+            'validation_method' => $normalizedValidationMethod ?? $validationMethod,
+            'validation_model' => $validationModel,
+            'declared_models' => $normalizedDeclaredModels ?? $declaredModels,
         ]);
 
         if ($definition === null) {
@@ -89,8 +116,78 @@ final class ProviderDefinitionManager
             'headers' => $definition['headers'],
             'timeout_ms' => $definition['timeout_ms'],
             'requires_placeholder_key' => $definition['requires_placeholder_key'],
+            'declared_models' => $definition['declared_models'],
+            'models_endpoint_enabled' => $definition['models_endpoint_enabled'],
+            'validation_method' => $definition['validation_method'],
+            'validation_model' => $definition['validation_model'],
             'enabled' => true,
         ]);
+    }
+
+    /**
+     * Update model discovery and credential-validation settings on an existing runtime OpenAI-compatible provider definition.
+     *
+     * @param  array<int, mixed>  $declaredModels
+     */
+    public function updateModelSettings(
+        int $id,
+        array $declaredModels,
+        bool $modelsEndpointEnabled,
+        string $validationMethod,
+        ?string $validationModel = null,
+    ): LaravelAiRouterProviderDefinition {
+        return DB::connection(config('laravel-ai-router.database.connection') ?: 'laravel-ai-router')->transaction(function () use ($id, $declaredModels, $modelsEndpointEnabled, $validationMethod, $validationModel): LaravelAiRouterProviderDefinition {
+            $definition = LaravelAiRouterProviderDefinition::query()->findOrFail($id);
+
+            if (! $modelsEndpointEnabled && $validationMethod === 'models') {
+                $validationMethod = 'chat';
+            }
+
+            $errors = [];
+            $normalizedDeclaredModels = ProviderDefinitionValidator::normalizeDeclaredModels($declaredModels);
+            if ($normalizedDeclaredModels === null) {
+                $errors['declared_models'] = 'Declared models must be a list of model IDs or model metadata objects with a non-empty id/model_id.';
+            }
+
+            $normalizedValidationMethod = ProviderDefinitionValidator::normalizeValidationMethod($validationMethod);
+            if ($normalizedValidationMethod === null) {
+                $errors['validation_method'] = 'Validation method must be either models or chat.';
+            }
+
+            $validationModel = trim((string) $validationModel);
+            if ($normalizedValidationMethod === 'chat' && $validationModel === '' && ($normalizedDeclaredModels ?? []) === []) {
+                $errors['validation_model'] = 'Validation model is required when chat validation is enabled and no declared models exist.';
+            }
+
+            if ($errors !== []) {
+                throw ValidationException::withMessages($errors);
+            }
+
+            $normalized = ProviderDefinitionValidator::normalizeOpenAiCompatible($definition->platform, [
+                'name' => $definition->name,
+                'base_url' => $definition->base_url,
+                'headers' => $definition->headers ?? [],
+                'timeout_ms' => $definition->timeout_ms,
+                'requires_placeholder_key' => $definition->requires_placeholder_key,
+                'models_endpoint_enabled' => $modelsEndpointEnabled,
+                'validation_method' => $normalizedValidationMethod ?? $validationMethod,
+                'validation_model' => $validationModel,
+                'declared_models' => $normalizedDeclaredModels ?? $declaredModels,
+            ]);
+
+            if ($normalized === null) {
+                throw ValidationException::withMessages(['base_url' => 'Provider definition is invalid.']);
+            }
+
+            $definition->forceFill([
+                'declared_models' => $normalized['declared_models'],
+                'models_endpoint_enabled' => $normalized['models_endpoint_enabled'],
+                'validation_method' => $normalized['validation_method'],
+                'validation_model' => $normalized['validation_model'],
+            ])->save();
+
+            return $definition->refresh();
+        });
     }
 
     /**

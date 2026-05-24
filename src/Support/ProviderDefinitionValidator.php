@@ -13,6 +13,13 @@ final class ProviderDefinitionValidator
     private const UNSAFE_HOST_SUFFIXES = ['.localhost', '.local', '.test', '.internal'];
 
     /** @var list<string> */
+    private const OPENAI_COMPATIBLE_TERMINAL_PATH_SUFFIXES = [
+        '/chat/completions',
+        '/completions',
+        '/models',
+    ];
+
+    /** @var list<string> */
     private const SENSITIVE_HEADER_NAMES = [
         'authorization',
         'proxy-authorization',
@@ -87,6 +94,10 @@ final class ProviderDefinitionValidator
         }
 
         $baseUrl = (string) ($definition['base_url'] ?? '');
+        if (self::terminalEndpointPathError($baseUrl) !== null) {
+            return null;
+        }
+
         $normalizedBaseUrl = self::normalizeBaseUrl($baseUrl);
         if ($normalizedBaseUrl === null) {
             return null;
@@ -94,6 +105,26 @@ final class ProviderDefinitionValidator
 
         $headers = (array) ($definition['headers'] ?? []);
         if (self::headersError($headers) !== null) {
+            return null;
+        }
+
+        $declaredModels = self::normalizeDeclaredModels($definition['declared_models'] ?? $definition['models'] ?? []);
+        if ($declaredModels === null) {
+            return null;
+        }
+
+        $modelsEndpointEnabled = (bool) ($definition['models_endpoint_enabled'] ?? true);
+        $validationMethod = self::normalizeValidationMethod($definition['validation_method'] ?? ($modelsEndpointEnabled ? 'models' : 'chat'));
+        if ($validationMethod === null) {
+            return null;
+        }
+
+        $validationModel = trim((string) ($definition['validation_model'] ?? ''));
+        if ($validationModel === '' && $validationMethod === 'chat') {
+            $validationModel = (string) ($declaredModels[0]['model_id'] ?? '');
+        }
+
+        if ($validationMethod === 'chat' && $validationModel === '') {
             return null;
         }
 
@@ -114,6 +145,10 @@ final class ProviderDefinitionValidator
             'headers' => self::sanitizeHeaders($headers),
             'timeout_ms' => self::normalizeTimeout($definition['timeout_ms'] ?? 15_000),
             'requires_placeholder_key' => (bool) ($definition['requires_placeholder_key'] ?? false),
+            'declared_models' => $declaredModels,
+            'models_endpoint_enabled' => $modelsEndpointEnabled,
+            'validation_method' => $validationMethod,
+            'validation_model' => $validationModel === '' ? null : $validationModel,
             'custom' => true,
         ];
     }
@@ -135,6 +170,10 @@ final class ProviderDefinitionValidator
      */
     public static function baseUrlError(string $baseUrl, bool $requirePublicDns = false): ?string
     {
+        if (($error = self::terminalEndpointPathError($baseUrl)) !== null) {
+            return $error;
+        }
+
         if (self::normalizeBaseUrl($baseUrl, requirePublicDns: $requirePublicDns) === null) {
             return 'Provider base URL must be a public HTTPS URL without credentials, query, or fragment.';
         }
@@ -291,6 +330,128 @@ final class ProviderDefinitionValidator
     public static function normalizeTimeout(mixed $timeoutMs): int
     {
         return min(300_000, max(1_000, (int) $timeoutMs));
+    }
+
+    /**
+     * Return a validation error for declared custom provider model metadata.
+     */
+    public static function declaredModelsError(mixed $models): ?string
+    {
+        return self::normalizeDeclaredModels($models) === null
+            ? 'Declared models must be a list of model IDs or model metadata objects with a non-empty id/model_id.'
+            : null;
+    }
+
+    /**
+     * Normalize a declared/static custom-provider model list.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    public static function normalizeDeclaredModels(mixed $models): ?array
+    {
+        if ($models === null || $models === '') {
+            return [];
+        }
+
+        if (! is_array($models)) {
+            return null;
+        }
+
+        $normalized = [];
+        foreach ($models as $model) {
+            $rawModel = $model;
+            if (is_string($model) || is_int($model) || is_float($model)) {
+                $model = ['model_id' => (string) $model];
+            }
+
+            if (! is_array($model)) {
+                return null;
+            }
+
+            $modelId = trim((string) ($model['model_id'] ?? $model['id'] ?? ''));
+            if ($modelId === '') {
+                return null;
+            }
+
+            $displayName = trim((string) ($model['display_name'] ?? $model['name'] ?? $modelId));
+            if ($displayName === '') {
+                $displayName = $modelId;
+            }
+
+            $row = [
+                'model_id' => $modelId,
+                'display_name' => $displayName,
+                'budget_label' => trim((string) ($model['budget_label'] ?? 'credits-based')) ?: 'credits-based',
+                'is_free' => (bool) ($model['is_free'] ?? false),
+                'raw_metadata' => is_array($rawModel) ? $rawModel : ['id' => $modelId],
+            ];
+
+            foreach (['context_window', 'rpm_limit', 'rpd_limit', 'tpm_limit', 'tpd_limit', 'intelligence_rank', 'speed_rank'] as $integerField) {
+                if (array_key_exists($integerField, $model) && $model[$integerField] !== null) {
+                    if (! is_scalar($model[$integerField])) {
+                        return null;
+                    }
+
+                    $row[$integerField] = max(0, (int) $model[$integerField]);
+                }
+            }
+
+            foreach (['supports_tools', 'auto_enabled'] as $booleanField) {
+                if (array_key_exists($booleanField, $model)) {
+                    $value = $model[$booleanField];
+                    if ($value !== null && ! is_scalar($value)) {
+                        return null;
+                    }
+
+                    $row[$booleanField] = $value === null ? null : filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+                    if ($value !== null && $row[$booleanField] === null) {
+                        return null;
+                    }
+                }
+            }
+
+            $normalized[$modelId] = $row;
+        }
+
+        return array_values($normalized);
+    }
+
+    /**
+     * Normalize the provider credential validation method.
+     */
+    public static function normalizeValidationMethod(mixed $method): ?string
+    {
+        $method = strtolower(trim((string) $method));
+
+        return in_array($method, ['models', 'chat'], true) ? $method : null;
+    }
+
+    /**
+     * Return a validation error when a base URL points at a final OpenAI-compatible endpoint.
+     */
+    private static function terminalEndpointPathError(string $baseUrl): ?string
+    {
+        $path = (string) (parse_url(rtrim(trim($baseUrl), '/'), PHP_URL_PATH) ?: '');
+
+        return self::pathUsesTerminalEndpoint($path)
+            ? 'Provider base URL must point to the API root (for example https://host/v1), not a final /chat/completions, /completions, or /models endpoint.'
+            : null;
+    }
+
+    /**
+     * Determine whether a URL path targets an OpenAI-compatible terminal endpoint rather than the API root.
+     */
+    private static function pathUsesTerminalEndpoint(string $path): bool
+    {
+        $path = '/'.trim(strtolower($path), '/');
+
+        foreach (self::OPENAI_COMPATIBLE_TERMINAL_PATH_SUFFIXES as $suffix) {
+            if ($path === $suffix || str_ends_with($path, $suffix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

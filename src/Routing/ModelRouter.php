@@ -217,15 +217,6 @@ final class ModelRouter
                     continue;
                 }
 
-                $fallbackExists = LaravelAiRouterFallback::query()
-                    ->where('laravel_ai_router_model_id', $model->getKey())
-                    ->where('enabled', true)
-                    ->exists();
-
-                if (! $fallbackExists) {
-                    continue;
-                }
-
                 $key = $this->usableSelectedCacheKey($cache, $model, $estimatedTokens, $requiresTools, $excludedKeyIds);
 
                 if (! $key instanceof LaravelAiRouterProviderKey) {

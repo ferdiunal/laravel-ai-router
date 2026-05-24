@@ -2,6 +2,35 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.4.9 - 2026-05-24
+
+### Added
+
+- Added `laravel-ai-router:provider-definition:models` to edit declared model lists, live `/models` discovery mode, and chat-based credential validation settings for existing runtime custom OpenAI-compatible provider definitions.
+- Added runtime custom-provider config fields for `declared_models`, `models_endpoint_enabled`, `validation_method`, and `validation_model`, including docs for models-less OpenAI-compatible gateways.
+
+### Fixed
+
+- Fixed models-less OpenAI-compatible gateways by allowing declared model cache rows with source `definition`, exact-model routing without calling `/models`, and optional minimal `POST /chat/completions` key validation.
+- Rejected final OpenAI-compatible endpoint URLs such as `/chat/completions`, `/completions`, and `/models` as provider base URLs so runtime definitions must point at the API root.
+- Preserved previously selected auto-routing cache rows across provider model refreshes while keeping declared model rows out of `auto` unless their metadata explicitly sets `auto_enabled` or the operator selects them later.
+
+### Validation
+
+- `vendor/bin/pest tests/Feature/CustomOpenAiCompatibleProviderTest.php --colors=never` — 49 passed, 98 assertions.
+- `vendor/bin/pest tests/Feature/ModelRouterSelectedProviderRoutingTest.php --colors=never` — 6 passed, 11 assertions.
+- `vendor/bin/pest tests/Feature/Console/ProviderSyncCommandTest.php --colors=never` — 6 passed, 40 assertions.
+- `vendor/bin/pest tests/Unit/Adapters/OpenAiCompatibleAdapterTest.php --colors=never` — 9 passed, 17 assertions.
+- `vendor/bin/pest tests/Feature/Console/ProviderModelsCommandTest.php --colors=never` — 1 passed, 3 assertions.
+- `composer validate --strict --no-ansi` — valid.
+- `composer format:check --no-ansi` — 116 files passed.
+- `composer analyse --no-ansi` — no errors.
+- `composer test --no-ansi` — 201 passed, 1 skipped, 640 assertions.
+- `composer ci --no-ansi` — 201 passed, 1 skipped, 640 assertions.
+- `git diff --check` — clean.
+
+**Full Changelog**: https://github.com/ferdiunal/laravel-ai-router/compare/v0.4.8...v0.4.9
+
 ## v0.4.8 - 2026-05-24
 
 ### Added

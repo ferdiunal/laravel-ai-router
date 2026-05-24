@@ -38,33 +38,53 @@ final class ProviderModelCacheService
     {
         $models = [];
         $source = 'live';
+        $platform = (string) $key->platform;
 
-        if (! $this->adapters->has($key->platform)) {
+        if (! $this->adapters->has($platform)) {
             $this->disableCacheRows($key);
 
             return [];
         }
 
         try {
-            $models = $this->adapters->for($key->platform)->models($key->credentialForProvider());
-        } catch (ProviderAuthenticationException) {
+            $definition = ProviderCatalog::get($platform);
+        } catch (\InvalidArgumentException) {
             $this->disableCacheRows($key);
-            $this->markKeyInvalid($key);
 
             return [];
-        } catch (Throwable) {
-            $models = [];
         }
 
-        $models = $this->filterAndEnrich((string) $key->platform, $models);
+        $declaredModels = $this->declaredModels($definition);
+        $modelsEndpointEnabled = (bool) ($definition['models_endpoint_enabled'] ?? true);
+
+        if ($modelsEndpointEnabled) {
+            try {
+                $models = $this->adapters->for($platform)->models($key->credentialForProvider());
+            } catch (ProviderAuthenticationException) {
+                $this->disableCacheRows($key);
+                $this->markKeyInvalid($key);
+
+                return [];
+            } catch (Throwable) {
+                $models = [];
+            }
+
+            $models = $this->filterAndEnrich($platform, $models);
+        }
+
+        if ($models === [] && $declaredModels !== []) {
+            $models = $declaredModels;
+            $source = 'definition';
+        }
 
         if ($models === []) {
-            $models = $this->curatedModels((string) $key->platform);
+            $models = $this->curatedModels($platform);
             $source = 'curated';
         }
 
-        $this->ensureRoutableLiveModels((string) $key->platform, $models, $source);
+        $this->ensureRoutableModels($platform, $models, $source);
 
+        $selectedModelIds = $this->selectedModelIdsForKey($key);
         $this->disableCacheRows($key);
 
         $rows = [];
@@ -87,6 +107,7 @@ final class ProviderModelCacheService
                     'supports_tools' => $model['supports_tools'] ?? null,
                     'is_free' => (bool) ($model['is_free'] ?? true),
                     'enabled' => true,
+                    'auto_enabled' => $this->refreshedAutoEnabled($model, $source, $selectedModelIds),
                     'source' => $source,
                     'raw_metadata' => $model['raw_metadata'] ?? null,
                     'checked_at' => now(),
@@ -248,6 +269,70 @@ final class ProviderModelCacheService
     }
 
     /**
+     * Decide the auto-selected flag for a freshly written cache row while preserving prior operator selection.
+     *
+     * @param  array<string, mixed>  $model
+     * @param  array<int, string>  $selectedModelIds
+     */
+    private function refreshedAutoEnabled(array $model, string $source, array $selectedModelIds): bool
+    {
+        if (in_array((string) $model['model_id'], $selectedModelIds, true)) {
+            return true;
+        }
+
+        if ($source === 'definition' && array_key_exists('auto_enabled', $model)) {
+            return $this->booleanFlag($model['auto_enabled']);
+        }
+
+        return false;
+    }
+
+    /**
+     * Return a normalized boolean-like flag without treating string "false" as truthy.
+     */
+    private function booleanFlag(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if ($value === null) {
+            return false;
+        }
+
+        return filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) === true;
+    }
+
+    /**
+     * Return selected model IDs before a refresh disables stale rows.
+     *
+     * @return array<int, string>
+     */
+    private function selectedModelIdsForKey(LaravelAiRouterProviderKey $key): array
+    {
+        return LaravelAiRouterProviderModelCache::query()
+            ->where('provider_key_id', $key->getKey())
+            ->where('enabled', true)
+            ->where('auto_enabled', true)
+            ->orderBy('model_id')
+            ->pluck('model_id')
+            ->all();
+    }
+
+    /**
+     * Return normalized declared model rows from a provider catalog definition.
+     *
+     * @param  array<string, mixed>  $definition
+     * @return array<int, array<string, mixed>>
+     */
+    private function declaredModels(array $definition): array
+    {
+        $models = $definition['declared_models'] ?? [];
+
+        return is_array($models) ? array_values($models) : [];
+    }
+
+    /**
      * Filter live provider model rows to available candidates and enrich them with curated metadata when available.
      *
      * @param  array<int, array<string, mixed>>  $liveModels
@@ -293,13 +378,13 @@ final class ProviderModelCacheService
     }
 
     /**
-     * Create runtime model and fallback rows for live models that can be routed by the package.
+     * Create runtime model and fallback rows for provider-discovered or definition-declared models that can be routed by the package.
      *
      * @param  array<int, array<string, mixed>>  $models
      */
-    private function ensureRoutableLiveModels(string $platform, array $models, string $source): void
+    private function ensureRoutableModels(string $platform, array $models, string $source): void
     {
-        if ($source !== 'live' || $models === []) {
+        if (! in_array($source, ['live', 'definition'], true) || $models === []) {
             return;
         }
 
@@ -343,8 +428,11 @@ final class ProviderModelCacheService
                 $fallback->priority = $nextPriority++;
             }
 
-            $autoEligible = $this->availability->shouldEnableAutoFallback($platform, $definition, $model);
-            $hasEnabledCuratedFallback = (bool) ($model['_has_curated_metadata'] ?? false)
+            $autoEligible = $source === 'definition'
+                ? (bool) ($model['auto_enabled'] ?? false)
+                : $this->availability->shouldEnableAutoFallback($platform, $definition, $model);
+            $hasEnabledCuratedFallback = $source === 'live'
+                && (bool) ($model['_has_curated_metadata'] ?? false)
                 && $fallback->exists
                 && (bool) $fallback->enabled;
             $enabledForAuto = $autoEligible || $hasEnabledCuratedFallback;

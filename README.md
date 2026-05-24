@@ -179,6 +179,7 @@ Runtime custom providers let you add OpenAI-compatible gateways, proxies, or pro
 ```bash
 php artisan laravel-ai-router:provider-definition:add
 php artisan laravel-ai-router:provider-definition:list
+php artisan laravel-ai-router:provider-definition:models
 php artisan laravel-ai-router:provider-definition:enable
 php artisan laravel-ai-router:provider-definition:disable
 php artisan laravel-ai-router:provider-definition:remove
@@ -195,10 +196,14 @@ A runtime provider definition contains:
 - Optional metadata headers as JSON, for example `{"X-Title":"Laravel AI Router"}`.
 - Timeout in milliseconds.
 - Optional anonymous placeholder-key support.
+- Optional declared model list for gateways that do not expose a compatible `/models` endpoint.
+- Live `/models` discovery mode (`enabled` or `disabled`).
+- Credential validation method: `models` for `GET /models`, or `chat` for a minimal `POST /chat/completions` request using the configured validation model.
 
 Security constraints are enforced before persistence and before request dispatch:
 
 - Base URLs must use public `https://` URLs.
+- Base URLs must point at the API root, for example `https://api.example.com/v1`, not a final `/chat/completions`, `/completions`, or `/models` endpoint.
 - Credentials, query strings, fragments, localhost, local/test/internal hostnames, private IPs, and reserved IPs are rejected.
 - DNS resolution must return public addresses only.
 - Redirects are not followed for runtime provider validation.
@@ -219,12 +224,31 @@ You can also define static custom providers in config:
             ],
             'timeout_ms' => 30000,
             'requires_placeholder_key' => false,
+            'models_endpoint_enabled' => false,
+            'validation_method' => 'chat',
+            'validation_model' => 'mimo-v2.5-pro',
+            'declared_models' => [
+                ['id' => 'mimo-v2.5-pro', 'name' => 'MIMO v2.5 Pro', 'auto_enabled' => true],
+            ],
         ],
     ],
 ],
 ```
 
 When a routable OpenAI-compatible provider returns model IDs from its `/models` endpoint, Laravel AI Router can cache those model IDs by provider + label and create runtime model/fallback rows so they can participate in exact model routing.
+
+For OpenAI-compatible gateways that do not provide a compatible `/models` endpoint, disable live model discovery and declare the routable chat models explicitly. You can set those fields while adding the provider definition or update them later:
+
+```bash
+php artisan laravel-ai-router:provider-definition:models \
+    --id=1 \
+    --models=mimo-v2.5-pro \
+    --models-endpoint=disabled \
+    --validation-method=chat \
+    --validation-model=mimo-v2.5-pro
+```
+
+Declared model rows are cached with source `definition` when provider keys are refreshed. Exact model routing can use declared models. For `auto` / `random_provider`, either include `auto_enabled: true` in declared model JSON metadata or select the cached rows later with `php artisan laravel-ai-router:provider:models`; simple comma-separated IDs remain exact-routeable but are not auto-selected by default.
 
 ## Model Cache and Auto Routing Selection
 

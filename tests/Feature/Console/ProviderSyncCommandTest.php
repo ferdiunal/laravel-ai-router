@@ -5,6 +5,8 @@ declare(strict_types=1);
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderKey;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterProviderModelCache;
 use Ferdiunal\LaravelAiRouter\Models\LaravelAiRouterRateWindow;
+use Ferdiunal\LaravelAiRouter\Services\ProviderDefinitionManager;
+use Ferdiunal\LaravelAiRouter\Services\ProviderKeyManager;
 use Ferdiunal\LaravelAiRouter\Services\ProviderModelSelectionManager;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
@@ -83,6 +85,66 @@ it('validates a provider key, refreshes models, preserves selected auto rows, an
         ->and($key->last_checked_at)->not->toBeNull()
         ->and(LaravelAiRouterProviderModelCache::query()->where('provider_key_id', $key->getKey())->count())->toBe(2)
         ->and(app(ProviderModelSelectionManager::class)->selectedModelIdsForKey($key))->toBe(['qwen/qwen3-coder:free']);
+});
+
+it('validates models-less custom providers through chat without leaking secrets', function (): void {
+    migrateLaravelAiRouterForProviderSyncCommandTests();
+
+    app(ProviderDefinitionManager::class)->addOpenAiCompatible(
+        platform: 'sync-opengateway',
+        name: 'Sync OpenGateway',
+        baseUrl: 'https://example.com/gateway/v1',
+        modelsEndpointEnabled: false,
+        validationMethod: 'chat',
+        validationModel: 'mimo-v2.5-pro',
+        declaredModels: [[
+            'model_id' => 'mimo-v2.5-pro',
+            'display_name' => 'MIMO v2.5 Pro',
+            'budget_label' => 'credits-based',
+            'auto_enabled' => true,
+        ]],
+    );
+
+    Http::fake([
+        'https://example.com/gateway/v1/chat/completions' => Http::response([
+            'id' => 'chatcmpl_validation_1',
+            'object' => 'chat.completion',
+            'created' => 1,
+            'model' => 'mimo-v2.5-pro',
+            'choices' => [[
+                'index' => 0,
+                'message' => ['role' => 'assistant', 'content' => 'ok'],
+                'finish_reason' => 'stop',
+            ]],
+        ]),
+        'https://example.com/gateway/v1/models' => Http::response(['error' => ['message' => 'models unavailable']], 404),
+    ]);
+
+    $credential = 'sync-opengateway-test-credential-123456';
+    $key = app(ProviderKeyManager::class)->add('sync-opengateway', $credential, 'Gateway', refreshModels: true);
+
+    $exitCode = Artisan::call('laravel-ai-router:provider:sync', [
+        '--key-id' => $key->getKey(),
+        '--no-refresh-models' => true,
+        '--json' => true,
+    ]);
+
+    $output = Artisan::output();
+    $payload = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
+
+    expect($exitCode)->toBe(0)
+        ->and($output)->not->toContain($credential)
+        ->and($payload['results'][0]['api_status'])->toBe('healthy')
+        ->and($payload['results'][0]['cached_model_count'])->toBe(1)
+        ->and($payload['results'][0]['selected_auto_model_count'])->toBe(1)
+        ->and(app(ProviderModelSelectionManager::class)->selectedModelIdsForKey($key))->toBe(['mimo-v2.5-pro']);
+
+    Http::assertSent(function ($request): bool {
+        return $request->url() === 'https://example.com/gateway/v1/chat/completions'
+            && $request['model'] === 'mimo-v2.5-pro'
+            && $request['max_tokens'] === 1;
+    });
+    Http::assertNotSent(fn ($request): bool => $request->url() === 'https://example.com/gateway/v1/models');
 });
 
 it('marks invalid credentials invalid, disables stale cache rows, and fails when requested', function (): void {

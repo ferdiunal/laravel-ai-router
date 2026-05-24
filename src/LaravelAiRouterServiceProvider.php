@@ -10,6 +10,7 @@ use Ferdiunal\LaravelAiRouter\Console\Commands\ProviderDefinitionAddCommand;
 use Ferdiunal\LaravelAiRouter\Console\Commands\ProviderDefinitionDisableCommand;
 use Ferdiunal\LaravelAiRouter\Console\Commands\ProviderDefinitionEnableCommand;
 use Ferdiunal\LaravelAiRouter\Console\Commands\ProviderDefinitionListCommand;
+use Ferdiunal\LaravelAiRouter\Console\Commands\ProviderDefinitionModelsCommand;
 use Ferdiunal\LaravelAiRouter\Console\Commands\ProviderDefinitionRemoveCommand;
 use Ferdiunal\LaravelAiRouter\Console\Commands\ProviderDisableCommand;
 use Ferdiunal\LaravelAiRouter\Console\Commands\ProviderEnableCommand;
@@ -64,6 +65,7 @@ final class LaravelAiRouterServiceProvider extends ServiceProvider
                 ProviderDefinitionDisableCommand::class,
                 ProviderDefinitionEnableCommand::class,
                 ProviderDefinitionListCommand::class,
+                ProviderDefinitionModelsCommand::class,
                 ProviderDefinitionRemoveCommand::class,
                 ProviderDisableCommand::class,
                 ProviderEnableCommand::class,

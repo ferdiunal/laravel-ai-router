@@ -51,7 +51,10 @@ final class ProviderAdapterRegistry
                 baseUrl: (string) $definition['base_url'],
                 extraHeaders: $this->extraHeaders($platform, $definition),
                 enforcePublicBaseUrl: (bool) ($definition['custom'] ?? false),
+                validateUrl: isset($definition['validate_url']) ? (string) $definition['validate_url'] : null,
                 timeoutMs: (int) ($definition['timeout_ms'] ?? 15_000),
+                validationMethod: (string) ($definition['validation_method'] ?? 'models'),
+                validationModel: isset($definition['validation_model']) ? (string) $definition['validation_model'] : null,
                 maxStreamLineBytes: max(1024, (int) config('laravel-ai-router.streaming.max_line_bytes', 65_536)),
                 maxStreamEventBytes: max(1024, (int) config('laravel-ai-router.streaming.max_event_bytes', 1_048_576)),
             );

@@ -66,6 +66,12 @@ return [
             //     ],
             //     'timeout_ms' => 30000,
             //     'requires_placeholder_key' => false,
+            //     'models_endpoint_enabled' => false,
+            //     'validation_method' => 'chat',
+            //     'validation_model' => 'mimo-v2.5-pro',
+            //     'declared_models' => [
+            //         ['id' => 'mimo-v2.5-pro', 'name' => 'MIMO v2.5 Pro', 'auto_enabled' => true],
+            //     ],
             // ],
         ],
     ],

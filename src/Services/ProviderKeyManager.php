@@ -92,11 +92,17 @@ final class ProviderKeyManager
     private function autoEligibleModelIds(string $platform, array $definition, array $rows): array
     {
         return collect($rows)
-            ->filter(fn (LaravelAiRouterProviderModelCache $row): bool => $this->modelAvailability->shouldEnableAutoFallback(
-                $platform,
-                $definition,
-                $this->cacheRowPayload($row),
-            ))
+            ->filter(function (LaravelAiRouterProviderModelCache $row) use ($platform, $definition): bool {
+                if ($row->source === 'definition') {
+                    return (bool) $row->auto_enabled;
+                }
+
+                return $this->modelAvailability->shouldEnableAutoFallback(
+                    $platform,
+                    $definition,
+                    $this->cacheRowPayload($row),
+                );
+            })
             ->map(fn (LaravelAiRouterProviderModelCache $row): string => (string) $row->model_id)
             ->unique()
             ->values()

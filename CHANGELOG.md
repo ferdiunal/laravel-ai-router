@@ -2,6 +2,23 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.4.6 - 2026-05-24
+
+### Changed
+
+- Changed the default `auto` strategy to `random_provider`, which randomizes selected provider keys first and then selected models inside the chosen provider so one provider with many selected models does not dominate routing by model count.
+- Added provider-key scoped model selection for `laravel-ai-router:provider:add` and `laravel-ai-router:provider:models`; selected rows are stored with the cached model `auto_enabled` flag and unselected cached rows remain available for exact model IDs.
+- Preserved bootstrap compatibility by falling back to the legacy fallback pool while no provider model cache has been initialized, while failing closed once cached rows exist but no selected model can be routed.
+- Documented the selected provider/model pool, legacy `random`, `priority`, and `balanced_random` strategy choices in English and Turkish READMEs.
+
+### Validation
+
+- `composer validate --strict --no-ansi` — valid.
+- `composer ci --no-ansi` — 179 passed, 1 skipped, 562 assertions.
+- `git diff --check` — clean.
+
+**Full Changelog**: https://github.com/ferdiunal/laravel-ai-router/compare/v0.4.5...v0.4.6
+
 ## v0.4.5 - 2026-05-24
 
 ### Changed

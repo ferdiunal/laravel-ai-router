@@ -118,11 +118,10 @@ return [
     ],
 
     'routing' => [
-        // random is the default and shuffles the full fallback-enabled candidate list.
-        // priority keeps fallback order deterministic; balanced_random shuffles only
-        // the configured top pool. Normal key, cache, and limit checks still decide
-        // whether each shuffled candidate is usable.
-        'auto_strategy' => env('LARAVEL_AI_ROUTER_AUTO_STRATEGY', 'random'),
+        // random_provider is the default. It first shuffles selected provider keys,
+        // then shuffles the selected models inside that provider. priority, random,
+        // and balanced_random remain available for legacy fallback-list routing.
+        'auto_strategy' => env('LARAVEL_AI_ROUTER_AUTO_STRATEGY', 'random_provider'),
         'random_pool_size' => env('LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE', 5),
         'random_priority_window' => env('LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW', 3),
     ],
@@ -163,7 +162,7 @@ php artisan laravel-ai-router:provider:remove
 2. Provider-specific credential metadata when required, for example Cloudflare account ID.
 3. API key or API token.
 4. Provider-key label.
-5. Optional default model selection from cached available models after the automatic model-cache refresh.
+5. Optional multi-select of cached available models that should participate in `auto` / `random_provider` routing.
 
 The raw API key is encrypted before persistence and is never rendered in command output. Lists and prompts show masked credentials only.
 
@@ -223,7 +222,7 @@ You can also define static custom providers in config:
 
 When a routable OpenAI-compatible provider returns model IDs from its `/models` endpoint, Laravel AI Router can cache those model IDs by provider + label and create runtime model/fallback rows so they can participate in exact model routing.
 
-## Model Cache and Default Model Preference
+## Model Cache and Auto Routing Selection
 
 Provider model caches are scoped by provider key. A cache row stores the provider platform, provider label, model ID, display name, context window, rate limits, token limits, free-tier marker, tool support marker, source, and refresh timestamp.
 
@@ -233,7 +232,7 @@ Refresh and inspect the cache with:
 php artisan laravel-ai-router:provider:models
 ```
 
-The command can refresh the selected key's cache, list cached available models, and select a default model through a searchable prompt. Model listing and default selection expose only rows that match all of these constraints:
+The command can refresh the selected key's cache, list cached available models, and edit which rows are selected for `auto` / `random_provider` routing. Model listing and auto selection expose only rows that match all of these constraints:
 
 - The provider platform has a routable adapter.
 - The provider key is enabled.
@@ -242,9 +241,9 @@ The command can refresh the selected key's cache, list cached available models, 
 - The cache row matches the provider key ID, platform, and label.
 - The cache row is enabled.
 
-Live model discovery is provider-agnostic for routable providers: valid `/models` rows are cached even when their IDs do not end in `:free`. Free-tier status is stored as metadata (`is_free`); NVIDIA NIM live rows are marked as free credit-backed models (`free` + `credits-based`), while other non-free live rows default to the `credits-based` budget label. Exact live model IDs are routeable directly. New routable live rows also get fallback rows enabled so the default `auto` strategy can rotate across cached provider/model choices; review each upstream provider's quota and billing terms before using key-backed providers in production.
+Live model discovery is provider-agnostic for routable providers: valid `/models` rows are cached even when their IDs do not end in `:free`. Free-tier status is stored as metadata (`is_free`); NVIDIA NIM live rows are marked as free credit-backed models (`free` + `credits-based`), while other non-free live rows default to the `credits-based` budget label. Exact live model IDs are routeable directly, even when the cache row is not selected for `auto`. New routable live rows also get fallback rows enabled; `auto` uses only provider-key/model cache rows selected via provider setup, `provider:models`, or the safe non-interactive default that selects all newly refreshed rows for a newly added key. Review each upstream provider's quota and billing terms before using key-backed providers in production.
 
-The package config default remains `auto`. When the user selects a default model through the CLI, the selection is persisted in the package settings table and read at runtime by `LaravelAiRouterProvider::defaultTextModel()`. This does not mutate config files.
+The package config default remains `auto`. The `random_provider` strategy first randomizes selected provider keys and then randomizes the selected models inside the chosen provider, so a provider with many selected rows does not automatically outweigh a provider with one selected row. The legacy `random` strategy is still available when you explicitly want model-row weighted fallback-list shuffling; `priority` and `balanced_random` are also preserved.
 
 Programmatic model access:
 
@@ -290,7 +289,7 @@ ai()
     ->asText();
 ```
 
-`auto` lets Laravel AI Router choose an eligible provider key and fallback-enabled cached model. By default the auto chain uses `routing.auto_strategy=random`, which shuffles the full enabled fallback list on each route attempt while still enforcing disabled/invalid-key skips, model-cache compatibility, cooldowns, and rate/token-limit checks. Set `LARAVEL_AI_ROUTER_AUTO_STRATEGY=priority` for deterministic fallback order, or `balanced_random` to shuffle only the configured top fallback pool (`LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE`, bounded by `LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW`). Exact model calls still route only that requested model ID by default.
+`auto` lets Laravel AI Router choose from the provider-key/model cache rows selected for automatic routing. By default the auto chain uses `routing.auto_strategy=random_provider`: it shuffles selected provider keys first, then shuffles selected models within the chosen provider while still enforcing disabled/invalid-key skips, model-cache compatibility, tool support, cooldowns, and rate/token-limit checks. Set `LARAVEL_AI_ROUTER_AUTO_STRATEGY=priority` for deterministic fallback order, `random` for legacy model-row weighted fallback-list shuffling, or `balanced_random` to shuffle only the configured top fallback pool (`LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE`, bounded by `LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW`). Exact model calls can still route to a cached model ID that was not selected for `auto`, as long as the provider key/cache/model is healthy.
 
 You can also route an exact cached model ID:
 
@@ -573,7 +572,7 @@ $response->meta;
 | Structured output | Supported | Sends JSON-mode style options and maps valid JSON content into Laravel AI structured response types. |
 | Function tools | Supported for non-streaming | Executes OpenAI-compatible `tools` / `tool_calls` loops and sends tool result messages back to the provider. |
 | Streaming tools | Not supported | Fails before opening the upstream stream with a clear `LogicException`. |
-| Failover | Supported | Retries eligible internal provider keys up to `routing.max_attempts`, then maps rate limits, insufficient credit/quota, timeout, and overload errors to Laravel AI failover exception types. `auto` defaults to full random fallback-candidate rotation; `priority` and bounded `balanced_random` remain available without bypassing key/cache/limit eligibility checks. |
+| Failover | Supported | Retries eligible internal provider keys up to `routing.max_attempts`, then maps rate limits, insufficient credit/quota, timeout, and overload errors to Laravel AI failover exception types. `auto` defaults to provider-first random rotation across selected cached provider-key/model rows; `priority`, legacy model-row `random`, and bounded `balanced_random` remain available without bypassing key/cache/limit eligibility checks. |
 | Images, audio, transcription, embeddings, reranking, files, stores | Not supported | The package advertises only the text provider contract and throws explicit capability errors for unsupported methods. |
 
 ## Usage Analytics

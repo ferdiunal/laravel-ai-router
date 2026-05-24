@@ -118,11 +118,10 @@ return [
     ],
 
     'routing' => [
-        // random varsayılandır ve fallback-enabled aday listesinin tamamını karıştırır.
-        // priority deterministic fallback sırasını korur; balanced_random sadece configured
-        // üst havuzu karıştırır. Normal key, cache ve limit kontrolleri adayın
-        // kullanılabilirliğini yine belirler.
-        'auto_strategy' => env('LARAVEL_AI_ROUTER_AUTO_STRATEGY', 'random'),
+        // random_provider varsayılandır. Önce seçili provider key'leri,
+        // sonra o provider içindeki seçili modelleri karıştırır. priority,
+        // random ve balanced_random legacy fallback-list routing için korunur.
+        'auto_strategy' => env('LARAVEL_AI_ROUTER_AUTO_STRATEGY', 'random_provider'),
         'random_pool_size' => env('LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE', 5),
         'random_priority_window' => env('LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW', 3),
     ],
@@ -163,7 +162,7 @@ php artisan laravel-ai-router:provider:remove
 2. Gerekiyorsa provider-specific credential metadata; örneğin Cloudflare account ID.
 3. API key veya API token.
 4. Provider-key label.
-5. Otomatik model-cache refresh sonrası cached available modeller içinden opsiyonel default model seçimi.
+5. Otomatik model-cache refresh sonrası `auto` / `random_provider` routing'e katılacak cached available modellerin opsiyonel multi-select seçimi.
 
 Raw API key persistence öncesi encrypt edilir ve command output içinde hiçbir zaman gösterilmez. Listeleme ve prompt ekranlarında sadece masked credential kullanılır.
 
@@ -223,7 +222,7 @@ Static custom provider tanımı config üzerinden de yapılabilir:
 
 Routable OpenAI-compatible provider `/models` endpointinden model ID döndürürse Laravel AI Router bu model ID'leri provider + label bazında cacheleyebilir ve exact model routing içinde kullanılabilmeleri için runtime model/fallback satırlarını oluşturabilir.
 
-## Model Cache ve Default Model Tercihi
+## Model Cache ve Auto Routing Seçimi
 
 Provider model cache kayıtları provider key scope'undadır. Bir cache satırı provider platform, provider label, model ID, display name, context window, rate limits, token limits, free-tier bilgisi, tool support bilgisi, source ve refresh timestamp alanlarını saklar.
 
@@ -233,7 +232,7 @@ Cache refresh ve listeleme için:
 php artisan laravel-ai-router:provider:models
 ```
 
-Bu komut seçilen key için cache refresh yapabilir, cached available modelleri listeleyebilir ve searchable prompt ile default model seçtirebilir. Model listeleme ve default seçim akışı yalnızca şu kriterleri sağlayan kayıtları gösterir:
+Bu komut seçilen key için cache refresh yapabilir, cached available modelleri listeleyebilir ve hangi satırların `auto` / `random_provider` routing'e seçileceğini düzenleyebilir. Model listeleme ve auto seçimi yalnızca şu kriterleri sağlayan kayıtları gösterir:
 
 - Provider platform için routable adapter vardır.
 - Provider key enabled durumdadır.
@@ -242,9 +241,9 @@ Bu komut seçilen key için cache refresh yapabilir, cached available modelleri 
 - Cache row provider key ID, platform ve label ile eşleşir.
 - Cache row enabled durumdadır.
 
-Live model discovery routable provider'lar için geneldir: `/models` içinden gelen geçerli satırlar ID değeri `:free` ile bitmese bile cachelenir. Free-tier bilgisi metadata olarak saklanır (`is_free`); NVIDIA NIM live satırları free credit-backed model olarak işaretlenir (`free` + `credits-based`), diğer non-free live satırlar varsayılan olarak `credits-based` budget label alır. Exact live model ID'ler doğrudan route edilebilir. Yeni routable live satırlar için fallback row da enabled olur; böylece varsayılan `auto` stratejisi cached provider/model seçenekleri arasında dönebilir. Key-backed provider'ları production'da kullanmadan önce upstream quota ve billing şartlarını ayrıca gözden geçir.
+Live model discovery routable provider'lar için geneldir: `/models` içinden gelen geçerli satırlar ID değeri `:free` ile bitmese bile cachelenir. Free-tier bilgisi metadata olarak saklanır (`is_free`); NVIDIA NIM live satırları free credit-backed model olarak işaretlenir (`free` + `credits-based`), diğer non-free live satırlar varsayılan olarak `credits-based` budget label alır. Exact live model ID'ler cache row `auto` için seçili olmasa bile doğrudan route edilebilir. Yeni routable live satırlar için fallback row da enabled olur; `auto` yalnızca provider setup, `provider:models` veya yeni eklenen key için tüm yeni refresh satırlarını seçen güvenli non-interactive default üzerinden seçilmiş provider-key/model cache satırlarını kullanır. Key-backed provider'ları production'da kullanmadan önce upstream quota ve billing şartlarını ayrıca gözden geçir.
 
-Package config default değeri `auto` olarak kalır. Kullanıcı CLI üzerinden default model seçtiğinde seçim package settings tablosuna yazılır ve runtime sırasında `LaravelAiRouterProvider::defaultTextModel()` tarafından okunur. Bu işlem config dosyalarını değiştirmez.
+Package config default değeri `auto` olarak kalır. `random_provider` stratejisi önce seçili provider key'leri, sonra seçilen provider içindeki seçili modelleri randomize eder; böylece çok modeli seçili bir provider, tek modeli seçili provider'a otomatik olarak model sayısı kadar ağırlık bindirmez. Legacy `random` stratejisi model-row ağırlıklı fallback-list karıştırma gerektiğinde açıkça kullanılabilir; `priority` ve `balanced_random` da korunur.
 
 Kod içinden model erişimi:
 
@@ -290,7 +289,7 @@ ai()
     ->asText();
 ```
 
-`auto`, Laravel AI Router'ın uygun provider key ve fallback-enabled cached model seçmesini sağlar. Varsayılan auto zinciri `routing.auto_strategy=random` kullanır; her route denemesinde enabled fallback listesinin tamamını karıştırır ama disabled/invalid key skip, model-cache uyumluluğu, cooldown ve rate/token-limit kontrollerini yine uygular. Deterministic sıra istiyorsan `LARAVEL_AI_ROUTER_AUTO_STRATEGY=priority`, sadece configured üst fallback havuzunu karıştırmak istiyorsan `balanced_random` (`LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE`, `LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW`) kullan. Exact model çağrıları varsayılan olarak yalnızca istenen model ID içinde route edilir.
+`auto`, Laravel AI Router'ın otomatik routing için seçilmiş provider-key/model cache satırları arasından seçim yapmasını sağlar. Varsayılan auto zinciri `routing.auto_strategy=random_provider` kullanır: önce seçili provider key'leri, sonra seçilen provider içindeki seçili modelleri karıştırır; disabled/invalid key skip, model-cache uyumluluğu, tool support, cooldown ve rate/token-limit kontrollerini yine uygular. Deterministic sıra istiyorsan `LARAVEL_AI_ROUTER_AUTO_STRATEGY=priority`, legacy model-row ağırlıklı fallback-list karıştırma istiyorsan `random`, sadece configured üst fallback havuzunu karıştırmak istiyorsan `balanced_random` (`LARAVEL_AI_ROUTER_RANDOM_POOL_SIZE`, `LARAVEL_AI_ROUTER_RANDOM_PRIORITY_WINDOW`) kullan. Exact model çağrıları, provider key/cache/model healthy olduğu sürece `auto` için seçili olmayan cached model ID'lere de route edebilir.
 
 Cached exact model ID ile de route edebilirsin:
 
@@ -573,7 +572,7 @@ $response->meta;
 | Structured output | Desteklenir | JSON-mode benzeri seçenekleri gönderir ve geçerli JSON içeriğini Laravel AI structured response tiplerine map eder. |
 | Function tools | Non-stream desteklenir | OpenAI-compatible `tools` / `tool_calls` loop'unu çalıştırır ve tool result mesajlarını provider'a geri gönderir. |
 | Streaming tools | Desteklenmez | Upstream stream açılmadan açık bir `LogicException` ile fail eder. |
-| Failover | Desteklenir | Uygun internal provider key kayıtlarını `routing.max_attempts` sınırına kadar dener; ardından rate limit, insufficient credit/quota, timeout ve overload hatalarını Laravel AI failover exception tiplerine map eder. `auto` varsayılan olarak full random fallback-candidate rotation kullanır; `priority` ve bounded `balanced_random` key/cache/limit eligibility kontrollerini bypass etmeden kullanılabilir. |
+| Failover | Desteklenir | Uygun internal provider key kayıtlarını `routing.max_attempts` sınırına kadar dener; ardından rate limit, insufficient credit/quota, timeout ve overload hatalarını Laravel AI failover exception tiplerine map eder. `auto` varsayılan olarak seçilmiş cached provider-key/model satırları üzerinde provider-first random rotation kullanır; `priority`, legacy model-row `random` ve bounded `balanced_random` key/cache/limit eligibility kontrollerini bypass etmeden kullanılabilir. |
 | Images, audio, transcription, embeddings, reranking, files, stores | Desteklenmez | Paket yalnızca text provider contract advertise eder ve unsupported methodlar için açık capability hatası fırlatır. |
 
 ## Usage Analytics

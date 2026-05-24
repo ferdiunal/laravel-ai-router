@@ -2,7 +2,7 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
-## Unreleased
+## v0.4.8 - 2026-05-24
 
 ### Added
 
@@ -14,6 +14,8 @@ All notable changes to `laravel-ai-router` will be documented in this file.
 - `composer validate --strict --no-ansi` — valid.
 - `composer ci --no-ansi` — 193 passed, 1 skipped, 606 assertions.
 - `git diff --check` — clean.
+
+**Full Changelog**: https://github.com/ferdiunal/laravel-ai-router/compare/v0.4.7...v0.4.8
 
 ## v0.4.7 - 2026-05-24
 

@@ -151,6 +151,8 @@ Provider keys are identified by `provider + label`. This allows multiple keys fo
 php artisan laravel-ai-router:provider:add
 php artisan laravel-ai-router:provider:list
 php artisan laravel-ai-router:provider:models
+php artisan laravel-ai-router:provider:sync --key-id=1
+php artisan laravel-ai-router:provider:sync --key-id=1 --json
 php artisan laravel-ai-router:provider:enable
 php artisan laravel-ai-router:provider:disable
 php artisan laravel-ai-router:provider:remove
@@ -165,6 +167,8 @@ php artisan laravel-ai-router:provider:remove
 5. Optional multi-select of cached available models that should participate in `auto` / `random_provider` routing.
 
 The raw API key is encrypted before persistence and is never rendered in command output. Lists and prompts show masked credentials only.
+
+Use `laravel-ai-router:provider:sync` for operational health checks. It requires an explicit target (`--all`, `--provider=openrouter`, or `--key-id=1`), validates the stored credential, optionally refreshes the provider model cache, reports selected auto-model counts, and includes a `local_estimate` quota snapshot from package-owned rate/token windows. Default table output is model-level: each selected auto-routing model gets its own row with blocked status, RPM/RPD/TPM/TPD remaining limits, and cooldown. Add `--no-refresh-models` to validate credentials and local quota without model discovery, `--fail-on-invalid` for CI/ops checks, and `--json` for stable secret-free automation output with the same model quota data nested under `quota.models`. The command never prints raw API keys, bearer tokens, or composed credentials.
 
 Cloudflare Workers AI stores `account_id` separately in `credential_metadata` while encrypting only the API token in the key field. During routing and model discovery the package composes the adapter-facing `account_id:api_token` credential internally, then sends only the token as the upstream bearer credential. Legacy `account_id:api_token` input is still split into separate storage fields when adding a key.
 

@@ -2,6 +2,19 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Added `laravel-ai-router:provider:sync` to validate stored provider credentials, optionally refresh provider model caches, and report secret-free local quota readiness snapshots for explicit targets (`--all`, `--provider=`, or `--key-id=`). Default table output is model-level, showing each selected auto-routing model's blocked state, RPM/RPD/TPM/TPD remaining limits, and cooldown.
+
+### Validation
+
+- `vendor/bin/pest tests/Feature/Console/ProviderSyncCommandTest.php tests/Feature/Console/ProviderModelsCommandTest.php tests/Feature/ProviderModelCacheTest.php --colors=never` — 16 passed, 82 assertions.
+- `composer validate --strict --no-ansi` — valid.
+- `composer ci --no-ansi` — 193 passed, 1 skipped, 606 assertions.
+- `git diff --check` — clean.
+
 ## v0.4.7 - 2026-05-24
 
 ### Fixed

@@ -88,6 +88,44 @@ final class RateLimitWindowRepository
     }
 
     /**
+     * Return a read-only local quota snapshot for the provider/model/key tuple.
+     *
+     * @param  array{rpm:?int,rpd:?int,tpm:?int,tpd:?int}  $limits
+     * @return array<string, mixed>
+     */
+    public function quotaSnapshot(string $platform, string $modelId, int $keyId, array $limits): array
+    {
+        $cooldownUntil = $this->cooldownUntil($platform, $modelId, $keyId);
+        $limitSnapshots = [];
+
+        foreach (['rpm', 'rpd', 'tpm', 'tpd'] as $type) {
+            $limit = $limits[$type] ?? null;
+            $used = $this->currentWindowUsage($platform, $modelId, $keyId, $type);
+            $remaining = $limit !== null && $limit > 0 ? max(0, $limit - $used) : null;
+            $window = $this->windowBounds($type);
+
+            $limitSnapshots[$type] = [
+                'limit' => $limit,
+                'used' => $used,
+                'remaining' => $remaining,
+                'window_ends_at' => $window['end']->toDateTimeString(),
+            ];
+        }
+
+        $blocked = $cooldownUntil !== null
+            || collect($limitSnapshots)->contains(fn (array $snapshot): bool => $snapshot['remaining'] === 0);
+
+        return [
+            'provider' => $platform,
+            'model_id' => $modelId,
+            'provider_key_id' => $keyId,
+            'blocked' => $blocked,
+            'cooldown_until' => $cooldownUntil,
+            'limits' => $limitSnapshots,
+        ];
+    }
+
+    /**
      * Compare a rate-window row against the configured request limit.
      */
     private function underRequestLimit(string $platform, string $modelId, int $keyId, string $type, ?int $limit): bool
@@ -96,15 +134,7 @@ final class RateLimitWindowRepository
             return true;
         }
 
-        $window = $this->windowBounds($type);
-
-        $used = (int) LaravelAiRouterRateWindow::query()
-            ->where('platform', $platform)
-            ->where('model_id', $modelId)
-            ->where('provider_key_id', $keyId)
-            ->where('window_type', $type)
-            ->where('window_starts_at', $window['start'])
-            ->value('request_count');
+        $used = $this->currentWindowUsage($platform, $modelId, $keyId, $type);
 
         return $used < $limit;
     }
@@ -118,17 +148,42 @@ final class RateLimitWindowRepository
             return true;
         }
 
-        $window = $this->windowBounds($type);
+        $used = $this->currentWindowUsage($platform, $modelId, $keyId, $type);
 
-        $used = (int) LaravelAiRouterRateWindow::query()
+        return $used + $estimatedTokens <= $limit;
+    }
+
+    /**
+     * Return the active cooldown timestamp for the provider/model/key tuple, if present.
+     */
+    private function cooldownUntil(string $platform, string $modelId, int $keyId): ?string
+    {
+        $cooldownUntil = LaravelAiRouterRateWindow::query()
+            ->where('platform', $platform)
+            ->where('model_id', $modelId)
+            ->where('provider_key_id', $keyId)
+            ->where('window_type', 'cooldown')
+            ->where('cooldown_until', '>', now())
+            ->max('cooldown_until');
+
+        return is_string($cooldownUntil) ? $cooldownUntil : null;
+    }
+
+    /**
+     * Return current request or token usage for a bounded local rate window.
+     */
+    private function currentWindowUsage(string $platform, string $modelId, int $keyId, string $type): int
+    {
+        $window = $this->windowBounds($type);
+        $column = in_array($type, ['rpm', 'rpd'], true) ? 'request_count' : 'token_count';
+
+        return (int) LaravelAiRouterRateWindow::query()
             ->where('platform', $platform)
             ->where('model_id', $modelId)
             ->where('provider_key_id', $keyId)
             ->where('window_type', $type)
             ->where('window_starts_at', $window['start'])
-            ->value('token_count');
-
-        return $used + $estimatedTokens <= $limit;
+            ->value($column);
     }
 
     /**

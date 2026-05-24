@@ -151,6 +151,8 @@ Provider key kayıtları `provider + label` ikilisiyle ayrılır. Böylece aynı
 php artisan laravel-ai-router:provider:add
 php artisan laravel-ai-router:provider:list
 php artisan laravel-ai-router:provider:models
+php artisan laravel-ai-router:provider:sync --key-id=1
+php artisan laravel-ai-router:provider:sync --key-id=1 --json
 php artisan laravel-ai-router:provider:enable
 php artisan laravel-ai-router:provider:disable
 php artisan laravel-ai-router:provider:remove
@@ -165,6 +167,8 @@ php artisan laravel-ai-router:provider:remove
 5. Otomatik model-cache refresh sonrası `auto` / `random_provider` routing'e katılacak cached available modellerin opsiyonel multi-select seçimi.
 
 Raw API key persistence öncesi encrypt edilir ve command output içinde hiçbir zaman gösterilmez. Listeleme ve prompt ekranlarında sadece masked credential kullanılır.
+
+Operasyonel health check için `laravel-ai-router:provider:sync` kullan. Komut açık target ister (`--all`, `--provider=openrouter` veya `--key-id=1`), stored credential'ı doğrular, isteğe bağlı provider model cache refresh yapar, seçili auto-model sayısını raporlar ve package-owned rate/token window kayıtlarından `local_estimate` kota snapshot'ı döndürür. Varsayılan tablo çıktısı model bazlıdır: seçili her auto-routing model için blocked durumu, RPM/RPD/TPM/TPD kalan limitleri ve cooldown ayrı row olarak görünür. Model discovery yapmadan credential + lokal kota kontrolü için `--no-refresh-models`, CI/ops kontrollerinde invalid credential için non-zero exit almak için `--fail-on-invalid`, automation için aynı model kota datasını `quota.models` altında taşıyan secret-free stable çıktı almak için `--json` ekle. Komut raw API key, bearer token veya composed credential değerlerini hiçbir zaman yazdırmaz.
 
 Cloudflare Workers AI için `account_id`, `credential_metadata` içinde ayrı saklanır; key alanında sadece API token encrypt edilir. Routing ve model discovery sırasında paket adapter'a gidecek `account_id:api_token` credential'ını içeride üretir, upstream bearer credential olarak sadece token kısmını gönderir. Eski `account_id:api_token` girdileri de key eklenirken ayrı storage alanlarına bölünür.
 

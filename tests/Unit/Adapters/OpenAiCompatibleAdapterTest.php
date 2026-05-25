@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Ferdiunal\LaravelAiRouter\Adapters\OpenAiCompatibleAdapter;
+use Ferdiunal\LaravelAiRouter\Support\ProviderDefinitionValidator;
+use Ferdiunal\LaravelAiRouter\Tests\TestCase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -50,7 +52,7 @@ it('sends openai compatible chat completion requests with provider options', fun
     });
 });
 
-it('does not let extra headers override the provider bearer token', function () {
+it('does not let extra headers override transport safety headers or the provider bearer token', function () {
     Http::fake([
         'https://api.example.com/v1/chat/completions' => Http::response([
             'id' => 'chatcmpl_auth_header',
@@ -69,7 +71,7 @@ it('does not let extra headers override the provider bearer token', function () 
         platform: 'example',
         name: 'Example',
         baseUrl: 'https://api.example.com/v1',
-        extraHeaders: ['authorization' => 'Bearer injected-key', 'X-Api-Key' => 'injected-api-key', 'X-Test' => 'yes'],
+        extraHeaders: ['authorization' => 'Bearer injected-key', 'X-Api-Key' => 'injected-api-key', 'Accept-Encoding' => 'gzip', 'X-Test' => 'yes'],
     );
 
     $adapter->complete('provider-key', [['role' => 'user', 'content' => 'Hi']], 'model-a');
@@ -78,6 +80,8 @@ it('does not let extra headers override the provider bearer token', function () 
         return $request->hasHeader('Authorization', 'Bearer provider-key')
             && ! $request->hasHeader('Authorization', 'Bearer injected-key')
             && ! $request->hasHeader('X-Api-Key', 'injected-api-key')
+            && $request->hasHeader('Accept-Encoding', 'identity')
+            && ! $request->hasHeader('Accept-Encoding', 'gzip')
             && $request->hasHeader('X-Test', 'yes');
     });
 });
@@ -144,6 +148,36 @@ it('rejects unsafe custom base URLs before dispatching requests', function () {
 
     $adapter->models('provider-key');
 })->throws(RuntimeException::class, 'base URL must be a public HTTPS URL');
+
+it('prefers IPv4 DNS pins for dual-stack custom provider hosts', function () {
+    /** @var TestCase $this */
+    if (! defined('CURLOPT_RESOLVE')) {
+        $this->markTestSkipped('cURL resolve pinning is unavailable.');
+    }
+
+    $addresses = ProviderDefinitionValidator::publicAddressesForBaseUrl('https://example.com/v1');
+    $hasIpv4 = collect($addresses)->contains(fn (string $address): bool => filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false);
+    $hasIpv6 = collect($addresses)->contains(fn (string $address): bool => filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false);
+
+    if (! $hasIpv4 || ! $hasIpv6) {
+        $this->markTestSkipped('example.com is not dual-stack in this environment.');
+    }
+
+    $adapter = new OpenAiCompatibleAdapter(
+        platform: 'dual-stack-custom',
+        name: 'Dual Stack Custom',
+        baseUrl: 'https://example.com/v1',
+        enforcePublicBaseUrl: true,
+    );
+
+    $method = new ReflectionMethod($adapter, 'requestOptions');
+    $options = $method->invoke($adapter, 'https://example.com/v1/chat/completions');
+    /** @var array<int, string> $resolveEntries */
+    $resolveEntries = $options['curl'][(int) constant('CURLOPT_RESOLVE')] ?? [];
+
+    expect($resolveEntries)->not->toBeEmpty()
+        ->and(collect($resolveEntries)->contains(fn (string $entry): bool => str_contains($entry, '[')))->toBeFalse();
+});
 
 it('normalizes compatible provider text responses', function () {
     Http::fake([

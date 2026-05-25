@@ -62,7 +62,7 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         $url = $this->endpoint('chat/completions');
 
         $response = Http::timeout($this->timeoutSeconds($timeout))
-            ->withHeaders($this->safeExtraHeaders())
+            ->withHeaders($this->requestHeaders())
             ->withToken($apiKey)
             ->withOptions($this->requestOptions($url))
             ->acceptJson()
@@ -85,7 +85,7 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         $url = $this->endpoint('chat/completions');
 
         $response = Http::timeout($this->timeoutSeconds($timeout))
-            ->withHeaders($this->safeExtraHeaders())
+            ->withHeaders($this->requestHeaders())
             ->withToken($apiKey)
             ->accept('text/event-stream')
             ->withOptions([...$this->requestOptions($url), 'stream' => true])
@@ -104,7 +104,7 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         $url = $this->endpoint('models');
 
         $response = Http::timeout($this->timeoutSeconds())
-            ->withHeaders($this->safeExtraHeaders())
+            ->withHeaders($this->requestHeaders())
             ->withToken($apiKey)
             ->withOptions($this->requestOptions($url))
             ->acceptJson()
@@ -139,7 +139,7 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         $url = $this->validationEndpoint();
 
         $response = Http::timeout(10)
-            ->withHeaders($this->safeExtraHeaders())
+            ->withHeaders($this->requestHeaders())
             ->withToken($apiKey)
             ->withOptions($this->requestOptions($url))
             ->get($url);
@@ -160,7 +160,7 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
         $url = $this->endpoint('chat/completions');
 
         $response = Http::timeout(10)
-            ->withHeaders($this->safeExtraHeaders())
+            ->withHeaders($this->requestHeaders())
             ->withToken($apiKey)
             ->withOptions($this->requestOptions($url))
             ->acceptJson()
@@ -278,7 +278,14 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
 
         $port = (int) (parse_url($url, PHP_URL_PORT) ?: 443);
 
-        return collect(ProviderDefinitionValidator::publicAddressesForBaseUrl($url))
+        $addresses = ProviderDefinitionValidator::publicAddressesForBaseUrl($url);
+        $ipv4Addresses = array_values(array_filter(
+            $addresses,
+            fn (string $address): bool => filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false,
+        ));
+        $addressesToPin = $ipv4Addresses !== [] ? $ipv4Addresses : $addresses;
+
+        return collect($addressesToPin)
             ->map(fn (string $address): string => sprintf(
                 '%s:%d:%s',
                 strtolower(rtrim($host, '.')),
@@ -307,6 +314,31 @@ final class OpenAiCompatibleAdapter implements ProviderAdapter
                 $headers[$sanitizedName] = $sanitizedValue;
             }
         }
+
+        return $headers;
+    }
+
+    /**
+     * Return request headers for OpenAI-compatible HTTP calls while forcing identity encoding.
+     *
+     * Some compatible gateways advertise gzip while returning plain JSON; asking for identity
+     * keeps cURL/Guzzle from failing during automatic decompression.
+     *
+     * @return array<string, string>
+     */
+    private function requestHeaders(): array
+    {
+        $headers = [];
+
+        foreach ($this->safeExtraHeaders() as $name => $value) {
+            if (strtolower($name) === 'accept-encoding') {
+                continue;
+            }
+
+            $headers[$name] = $value;
+        }
+
+        $headers['Accept-Encoding'] = 'identity';
 
         return $headers;
     }

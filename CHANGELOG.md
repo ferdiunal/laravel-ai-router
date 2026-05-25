@@ -2,6 +2,18 @@
 
 All notable changes to `laravel-ai-router` will be documented in this file.
 
+## v0.4.10 - 2026-05-25
+
+### Fixes
+
+- Hardens OpenAI-compatible custom provider transport for dual-stack gateway hosts by preferring IPv4 DNS pins when available, while preserving IPv6-only fallback.
+- Forces identity response encoding so gateways that incorrectly advertise gzip do not fail during cURL/Guzzle decompression.
+- Prevents custom extra headers from overriding transport/auth safety headers.
+
+### Verification
+
+- composer ci
+
 ## v0.4.9 - 2026-05-24
 
 ### Added

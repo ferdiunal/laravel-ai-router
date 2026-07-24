@@ -23,7 +23,7 @@
         "illuminate/database": "^13.0",
         "illuminate/http": "^13.0",
         "illuminate/support": "^13.0",
-        "laravel/ai": "^0.7",
+        "laravel/ai": "^0.10",
         "laravel/prompts": "^0.3.6"
     },
     "require-dev": {
